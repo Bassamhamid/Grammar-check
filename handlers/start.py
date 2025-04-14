@@ -18,20 +18,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
         
-        # تعيين القيم الافتراضية
+        # تعيين القيم الافتراضية مع التحقق من وجودها
         request_count = user_data.get('request_count', 0)
         current_time = time.time()
         reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
-        reset_time = user_data.get('reset_time', current_time + (reset_hours * 3600))
-        time_left = max(0, reset_time - current_time)
-        hours_left = max(0, int(time_left // 3600))
+        
+        # التحقق من وجود reset_time وإلا استخدام قيمة افتراضية
+        reset_time = user_data.get('reset_time')
+        if reset_time is None:
+            reset_time = current_time + (reset_hours * 3600)
+            limiter.db.update_user(user_id, {'reset_time': reset_time})
+
+        # حساب الوقت المتبقي بشكل آمن
+        try:
+            time_left = max(0, float(reset_time) - current_time)
+            hours_left = max(0, int(time_left // 3600))
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error calculating time left: {str(e)}")
+            time_left = 0
+            hours_left = 0
 
         welcome_msg = f"""
 <b>✨ مرحباً بك في بوت التصحيح النحوي ✨</b>
 
 <b>📊 إحصائيات حسابك:</b>
 - عدد الطلبات اليومية: <code>{Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT}</code>
-- الطلبات المتبقية: <code>{Config.PREMIUM_REQUEST_LIMIT - request_count if is_premium else Config.REQUEST_LIMIT - request_count}</code>
+- الطلبات المتبقية: <code>{max(0, Config.PREMIUM_REQUEST_LIMIT - request_count) if is_premium else max(0, Config.REQUEST_LIMIT - request_count)}</code>
 - الحد الأقصى للنص: <code>{Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT}</code> حرفاً
 - وقت تجديد الطلبات: بعد <code>{hours_left}</code> ساعة
 
@@ -60,11 +72,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error in start command: {str(e)}", exc_info=True)
-        error_msg = "⚠️ حدث خطأ غير متوقع. يرجى المحاولة لاحقاً."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_msg)
-        else:
-            await update.message.reply_text(error_msg)
+        error_msg = "⚠️ حدث خطأ غير متوقع. جاري إعادة التعيين..."
+        
+        try:
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            else:
+                await update.message.reply_text(error_msg)
+            
+            # إعادة تعيين بيانات المستخدم
+            user_id = update.effective_user.id
+            limiter.reset_user(user_id)
+            await start(update, context)  # إعادة المحاولة
+        except Exception as e:
+            logger.error(f"Error in error handling: {str(e)}")
 
 async def show_normal_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
