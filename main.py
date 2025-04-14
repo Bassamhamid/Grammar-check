@@ -2,7 +2,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from config import Config
 from handlers.start import start
 from handlers.text_handling import handle_message, handle_callback
-from handlers.subscription import check_subscription, verify_subscription_callback
+from handlers.subscription import check_subscription
 
 def main():
     # Build application
@@ -11,11 +11,10 @@ def main():
     # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite)$"))
-    app.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
+    app.add_handler(CallbackQueryHandler(handle_callback))
     
-    # Check subscription (lower priority group)
-    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, check_subscription), group=1)
+    # Check subscription periodically (every message/callback)
+    app.add_handler(MessageHandler(filters.ALL, check_subscription), group=1)
     app.add_handler(CallbackQueryHandler(check_subscription), group=1)
     
     # Run bot
