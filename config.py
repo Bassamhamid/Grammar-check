@@ -36,3 +36,8 @@ class Config:
 
     # Timeout Settings
     REQUEST_TIMEOUT = timedelta(seconds=30)
+
+    # Admin Settings - الجديد
+    ADMIN_IDS = json.loads(os.getenv("ADMIN_IDS", "[123456789]"))  # استبدل بالرقم الفعلي
+    MAX_BROADCAST_USERS = int(os.getenv("MAX_BROADCAST_USERS", 1000))
+    BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
