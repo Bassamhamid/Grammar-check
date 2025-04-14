@@ -1,4 +1,5 @@
 import os
+import json
 
 class Config:
     # Telegram Bot Token
@@ -24,5 +25,7 @@ class Config:
     # App Info
     SITE_URL = os.getenv("SITE_URL", "")
     SITE_TITLE = os.getenv("SITE_TITLE", "Arabic Text Bot")
-FIREBASE_DB_URL = os.getenv("FIREBASE_DATABASE_URL")
-    FIREBASE_SERVICE_ACCOUNT = json.loads(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON"))
+
+    # Firebase Configuration
+    FIREBASE_DB_URL = os.getenv("FIREBASE_DATABASE_URL")
+    FIREBASE_SERVICE_ACCOUNT = json.loads(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "{}")) if os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") else None
