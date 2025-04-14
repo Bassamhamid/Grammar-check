@@ -9,10 +9,11 @@ from telegram.ext import (
 )
 from config import Config
 from firebase_db import initialize_firebase
-from handlers.start import start, show_normal_usage, show_api_usage, back_to_start, setup_start_handlers
+from handlers.start import setup_start_handlers
 from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
 from handlers.premium import setup as setup_premium
+from handlers.admin_panel import setup_admin_handlers  # الجديد
 import logging
 import os
 
@@ -33,7 +34,7 @@ def initialize_system():
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
         
-        required_vars = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL']
+        required_vars = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'ADMIN_IDS']  # أضفنا ADMIN_IDS
         for var in required_vars:
             if not getattr(Config, var, None):
                 raise ValueError(f"المتغير {var} غير موجود في الإعدادات")
@@ -45,15 +46,11 @@ def initialize_system():
 
 def setup_all_handlers(application):
     """تسجيل جميع معالجات البوت"""
-    # معالجات من start.py
     setup_start_handlers(application)
-    
-    # معالجات أخرى
+    setup_admin_handlers(application)  # الجديد
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite|cancel_api|use_api)$"))
     application.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
-    
-    # معالجات API الشخصي
     setup_premium(application)
 
 def main():
@@ -64,7 +61,6 @@ def main():
         setup_all_handlers(app)
         app.add_error_handler(error_handler)
         
-        # إعدادات Webhook
         webhook_url = Config.WEBHOOK_URL.rstrip('/')
         port = int(Config.PORT)
         
