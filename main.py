@@ -2,18 +2,47 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import requests
 import os
+import json
 
-from telegram.ext import WebhookHandler
-
+# متغيرات البيئة
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
+SITE_URL = os.getenv("SITE_URL", "")
+SITE_TITLE = os.getenv("SITE_TITLE", "Arabic Text Bot")
 PORT = int(os.environ.get("PORT", "10000"))
 
+# دالة استدعاء نموذج OpenRouter
+def query_openrouter(prompt):
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": SITE_URL,
+        "X-Title": SITE_TITLE
+    }
+
+    data = {
+        "model": "mistralai/mistral-7b-instruct:free",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    response = requests.post(
+        url="https://openrouter.ai/api/v1/chat/completions",
+        headers=headers,
+        data=json.dumps(data)
+    )
+
+    response.raise_for_status()  # للتأكد من الاستجابة السليمة
+    result = response.json()["choices"][0]["message"]["content"]
+    return result
+
+# أمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("أرسل لي نصًا بالعربية، وسأعطيك خيارات:\n- تصحيح نحوي\n- إعادة صياغة")
 
+# استقبال الرسائل النصية
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
@@ -27,6 +56,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("اختر ماذا تريد أن أفعل بالنص:", reply_markup=reply_markup)
 
+# التعامل مع الضغط على الأزرار
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -41,30 +71,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("طلب غير معروف.")
         return
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    try:
+        result = query_openrouter(prompt)
+        await query.edit_message_text(f"**النتيجة:**\n{result}")
+    except Exception as e:
+        await query.edit_message_text(f"حدث خطأ أثناء الاتصال بالنموذج:\n{e}")
 
-    data = {
-        "model": "mistralai/mistral-7b-instruct",
-        "messages": [
-            {"role": "system", "content": "أنت مساعد ذكي متخصص في تحسين وصياغة النصوص العربية."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 500
-    }
-
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=data, headers=headers)
-
-    result = response.json()["choices"][0]["message"]["content"]
-
-    await query.edit_message_text(f"**النتيجة:**\n{result}")
-
-# إعداد التطبيق مع Webhook
+# إعداد التطبيق
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-# الأوامر والموجهات
+# إضافة الأوامر والموجهات
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT, handle_message))
 app.add_handler(CallbackQueryHandler(handle_callback))
@@ -75,4 +91,4 @@ app.run_webhook(
     port=PORT,
     url_path=TELEGRAM_TOKEN,
     webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
-      )
+        )
