@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from ..utils.limits import limiter
-from .subscription import check_subscription, send_subscription_message
+from utils.limits import limiter  # تغيير من استيراد نسبي إلى مطلق
+from handlers.subscription import check_subscription, send_subscription_message  # استيراد مطلق
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check subscription first
