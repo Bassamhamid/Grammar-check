@@ -14,6 +14,7 @@ from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
 from handlers.premium import setup as setup_premium
 import logging
+import os
 
 # تهيئة النظام
 logging.basicConfig(
@@ -58,28 +59,37 @@ def setup_handlers(application):
     # معالجات API الشخصي
     setup_premium(application)
 
+def is_webhook_mode():
+    """تحديد وضع التشغيل (Webhook أو Polling)"""
+    # إذا كان متغير USE_WEBHOOK موجودًا في Config أو متغيرات البيئة
+    use_webhook = getattr(Config, 'USE_WEBHOOK', False) or os.getenv('USE_WEBHOOK', 'False').lower() == 'true'
+    has_webhook_url = hasattr(Config, 'WEBHOOK_URL') and Config.WEBHOOK_URL
+    return use_webhook and has_webhook_url
+
 def main():
     try:
         initialize_system()
         app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
-        # تسجيل المعالجات
         setup_handlers(app)
-        
-        # معالج الأخطاء
         app.add_error_handler(error_handler)
         
         logger.info("🤖 جاري تشغيل البوت...")
         
-        if Config.USE_WEBHOOK:
+        if is_webhook_mode():
+            port = int(getattr(Config, 'PORT', os.getenv('PORT', 8443)))
+            webhook_url = Config.WEBHOOK_URL.strip('/')
+            
+            logger.info(f"🌐 تشغيل وضع Webhook على البورت {port}")
             app.run_webhook(
                 listen="0.0.0.0",
-                port=Config.PORT,
+                port=port,
                 url_path=Config.BOT_TOKEN,
-                webhook_url=f"{Config.WEBHOOK_URL}/{Config.BOT_TOKEN}",
+                webhook_url=f"{webhook_url}/{Config.BOT_TOKEN}",
                 drop_pending_updates=True
             )
         else:
+            logger.info("🔍 تشغيل وضع Polling")
             app.run_polling(drop_pending_updates=True)
             
     except Exception as e:
