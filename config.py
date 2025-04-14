@@ -14,9 +14,12 @@ class Config:
     CHANNEL_LINK = os.getenv("CHANNEL_LINK")         # رابط القناة
     
     # Usage Limits
-    CHAR_LIMIT = 120
-    REQUEST_LIMIT = 3
-    RESET_HOURS = 20
+    CHAR_LIMIT = 120                  # الحد الأساسي للأحرف
+    PREMIUM_CHAR_LIMIT = 500          # حد الأحرف لمستخدمي API الشخصي
+    REQUEST_LIMIT = 3                 # الحد الأساسي للطلبات
+    PREMIUM_REQUEST_LIMIT = 50        # حد الطلبات لمستخدمي API الشخصي
+    RESET_HOURS = 20                  # مدة تجديد الطلبات العادية
+    PREMIUM_RESET_HOURS = 24          # مدة تجديد طلبات API الشخصي
     
     # Webhook
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
