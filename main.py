@@ -34,7 +34,7 @@ def query_openrouter(prompt):
         data=json.dumps(data)
     )
 
-    response.raise_for_status()  # للتأكد من الاستجابة السليمة
+    response.raise_for_status()
     result = response.json()["choices"][0]["message"]["content"]
     return result
 
@@ -64,13 +64,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action, user_text = query.data.split("|", 1)
 
     if action == "correct":
-    prompt = f"""قم بتصحيح الأخطاء النحوية فقط في النص التالي بدون شرح وبدون إضافة أي كلمات أو تعليقات أو ترجمة، وأعد إرسال النص المصحح فقط:
+        prompt = f"""قم بتصحيح الأخطاء النحوية فقط في النص التالي بدون شرح وبدون إضافة أي كلمات أو تعليقات أو ترجمة. أرسل النص المصحح فقط:
 
-{text}"""
-elif action == "rewrite":
-    prompt = f"""قم بإعادة صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ الكامل على المعنى، بدون شرح وبدون إضافة أي تعليقات أو ترجمة. أرسل النص المعاد صياغته فقط:
+{user_text}"""
+    elif action == "rewrite":
+        prompt = f"""قم بإعادة صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ الكامل على المعنى، بدون شرح وبدون إضافة أي تعليقات أو ترجمة. أرسل النص المعاد صياغته فقط:
 
-{text}"""
+{user_text}"""
     else:
         await query.edit_message_text("طلب غير معروف.")
         return
@@ -95,4 +95,4 @@ app.run_webhook(
     port=PORT,
     url_path=TELEGRAM_TOKEN,
     webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
-        )
+)
