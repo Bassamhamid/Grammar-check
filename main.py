@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from config import Config
+from firebase_db import initialize_firebase
 from handlers.start import start
 from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
