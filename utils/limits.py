@@ -3,57 +3,63 @@ from config import Config
 from firebase_db import FirebaseDB
 import logging
 
+logger = logging.getLogger(__name__)
+
 class UsageLimiter:
     def __init__(self):
-        try:
-            self.db = FirebaseDB()
-            self.CHAR_LIMIT = Config.CHAR_LIMIT
-            self.REQUEST_LIMIT = Config.REQUEST_LIMIT
-            self.RESET_HOURS = Config.RESET_HOURS
-            logging.info("✅ UsageLimiter initialized successfully")
-        except Exception as e:
-            logging.error(f"🔥 Failed to initialize UsageLimiter: {str(e)}")
-            raise
+        self.db = FirebaseDB()
+        self.CHAR_LIMIT = Config.CHAR_LIMIT
+        self.REQUEST_LIMIT = Config.REQUEST_LIMIT
+        self.RESET_HOURS = Config.RESET_HOURS
 
     def check_limits(self, user_id: int) -> tuple:
         try:
-            user = self.db.get_user(user_id)
+            user_data = self.db.get_user(user_id)
             current_time = time.time()
             
-            if user.get('reset_time') and current_time > user['reset_time']:
+            # ضبط القيم الافتراضية إذا كانت غير موجودة
+            reset_time = user_data.get('reset_time') or (current_time + (self.RESET_HOURS * 3600))
+            request_count = user_data.get('request_count', 0)
+            
+            # إذا انتهت المدة، إعادة تعيين العداد
+            if current_time > reset_time:
                 self.db.update_user(user_id, {
                     'request_count': 0,
                     'reset_time': current_time + (self.RESET_HOURS * 3600)
                 })
                 return True, 0
             
-            remaining = self.REQUEST_LIMIT - user.get('request_count', 0)
-            time_left = max(0, (user.get('reset_time', 0) - current_time))
+            remaining = self.REQUEST_LIMIT - request_count
+            time_left = max(0, reset_time - current_time)
             return remaining > 0, time_left
+            
         except Exception as e:
-            logging.error(f"🚨 Error in check_limits: {str(e)}")
-            return False, 0
+            logger.error(f"Error in check_limits: {str(e)}", exc_info=True)
+            # القيم الافتراضية في حالة الخطأ
+            return True, 0
 
     def increment_usage(self, user_id: int):
         try:
-            user = self.db.get_user(user_id)
-            new_count = user.get('request_count', 0) + 1
-            update_data = {
-                'request_count': new_count,
-                'last_request': int(time.time())
-            }
+            user_data = self.db.get_user(user_id)
+            current_time = time.time()
             
-            if not user.get('reset_time'):
-                update_data['reset_time'] = time.time() + (self.RESET_HOURS * 3600)
+            # القيم الافتراضية إذا كانت غير موجودة
+            reset_time = user_data.get('reset_time') or (current_time + (self.RESET_HOURS * 3600))
+            request_count = user_data.get('request_count', 0)
             
-            self.db.update_user(user_id, update_data)
+            # إذا انتهت المدة، إعادة تعيين العداد
+            if current_time > reset_time:
+                reset_time = current_time + (self.RESET_HOURS * 3600)
+                request_count = 0
+            
+            self.db.update_user(user_id, {
+                'request_count': request_count + 1,
+                'last_request': int(current_time),
+                'reset_time': reset_time
+            })
+            
         except Exception as e:
-            logging.error(f"🚨 Error in increment_usage: {str(e)}")
+            logger.error(f"Error in increment_usage: {str(e)}", exc_info=True)
             raise
 
-# التهيئة مع التعامل مع الأخطاء
-try:
-    limiter = UsageLimiter()
-except Exception as e:
-    print(f"⚠️ Critical: Failed to initialize limiter - {str(e)}")
-    exit(1)
+limiter = UsageLimiter()
