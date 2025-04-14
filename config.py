@@ -1,34 +1,38 @@
 import os
 import json
+from datetime import timedelta
 
 class Config:
     # Telegram Bot Token
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_DEFAULT_BOT_TOKEN")
     
     # OpenRouter API
-    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "default_api_key")
     OPENROUTER_MODEL = "meta-llama/llama-4-maverick:free"
     
     # Channel Configuration
-    CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")  # بدون @
-    CHANNEL_LINK = os.getenv("CHANNEL_LINK")         # رابط القناة
+    CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "your_channel")  # بدون @
+    CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/your_channel")  # رابط القناة
     
     # Usage Limits
-    CHAR_LIMIT = 120                  # الحد الأساسي للأحرف
-    PREMIUM_CHAR_LIMIT = 500          # حد الأحرف لمستخدمي API الشخصي
-    REQUEST_LIMIT = 3                 # الحد الأساسي للطلبات
-    PREMIUM_REQUEST_LIMIT = 50        # حد الطلبات لمستخدمي API الشخصي
-    RESET_HOURS = 20                  # مدة تجديد الطلبات العادية
-    PREMIUM_RESET_HOURS = 24          # مدة تجديد طلبات API الشخصي
+    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", 120))
+    PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", 500))
+    REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", 3))
+    PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", 50))
+    RESET_HOURS = int(os.getenv("RESET_HOURS", 20))
+    PREMIUM_RESET_HOURS = int(os.getenv("PREMIUM_RESET_HOURS", 24))
     
     # Webhook
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-    PORT = int(os.environ.get("PORT", "10000"))
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-app.onrender.com")
+    PORT = int(os.getenv("PORT", 10000))
     
     # App Info
     SITE_URL = os.getenv("SITE_URL", "")
     SITE_TITLE = os.getenv("SITE_TITLE", "Arabic Text Bot")
 
     # Firebase Configuration
-    FIREBASE_DB_URL = os.getenv("FIREBASE_DATABASE_URL")
+    FIREBASE_DB_URL = os.getenv("FIREBASE_DATABASE_URL", "https://your-project.firebaseio.com")
     FIREBASE_SERVICE_ACCOUNT = json.loads(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "{}")) if os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") else None
+
+    # Timeout Settings
+    REQUEST_TIMEOUT = timedelta(seconds=30)
