@@ -55,6 +55,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔍 اختر الخدمة المطلوبة:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
             
     except Exception as e:
         logger.error(f"Error in handle_message: {str(e)}", exc_info=True)
