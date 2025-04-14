@@ -33,11 +33,11 @@ def initialize_system():
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
         
-        if not Config.BOT_TOKEN:
-            raise ValueError("BOT_TOKEN مفقود")
-        if not Config.FIREBASE_DB_URL:
-            raise ValueError("FIREBASE_DB_URL مفقود")
-            
+        required_vars = ['BOT_TOKEN', 'WEBHOOK_URL', 'PORT']
+        for var in required_vars:
+            if not getattr(Config, var, None):
+                raise ValueError(f"المتغير {var} غير موجود في الإعدادات")
+                
         logger.info("✅ تم التحقق من الإعدادات بنجاح")
     except Exception as e:
         logger.critical(f"❌ فشل تهيئة النظام: {str(e)}")
@@ -45,26 +45,16 @@ def initialize_system():
 
 def setup_handlers(application):
     """تسجيل جميع معالجات البوت"""
-    # معالجات الأوامر
     application.add_handler(CommandHandler("start", start))
-    
-    # معالجات الرسائل
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # معالجات الأزرار
     application.add_handler(CallbackQueryHandler(handle_process_button, pattern="^start_processing$"))
     application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite|cancel_api|use_api)$"))
     application.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
-    
-    # معالجات API الشخصي
     setup_premium(application)
 
-def is_webhook_mode():
-    """تحديد وضع التشغيل (Webhook أو Polling)"""
-    # إذا كان متغير USE_WEBHOOK موجودًا في Config أو متغيرات البيئة
-    use_webhook = getattr(Config, 'USE_WEBHOOK', False) or os.getenv('USE_WEBHOOK', 'False').lower() == 'true'
-    has_webhook_url = hasattr(Config, 'WEBHOOK_URL') and Config.WEBHOOK_URL
-    return use_webhook and has_webhook_url
+async def on_startup(app):
+    """وظيفة تنفيذية عند بدء التشغيل"""
+    await app.bot.set_webhook(f"{Config.WEBHOOK_URL}/{Config.BOT_TOKEN}")
 
 def main():
     try:
@@ -74,23 +64,22 @@ def main():
         setup_handlers(app)
         app.add_error_handler(error_handler)
         
-        logger.info("🤖 جاري تشغيل البوت...")
+        # إعدادات Webhook الأساسية
+        webhook_url = Config.WEBHOOK_URL.rstrip('/')
+        port = int(Config.PORT)
         
-        if is_webhook_mode():
-            port = int(getattr(Config, 'PORT', os.getenv('PORT', 8443)))
-            webhook_url = Config.WEBHOOK_URL.strip('/')
-            
-            logger.info(f"🌐 تشغيل وضع Webhook على البورت {port}")
-            app.run_webhook(
-                listen="0.0.0.0",
-                port=port,
-                url_path=Config.BOT_TOKEN,
-                webhook_url=f"{webhook_url}/{Config.BOT_TOKEN}",
-                drop_pending_updates=True
-            )
-        else:
-            logger.info("🔍 تشغيل وضع Polling")
-            app.run_polling(drop_pending_updates=True)
+        logger.info(f"🌐 جاري تشغيل البوت على الويب هوك (البورت: {port})")
+        logger.info(f"🔗 رابط الويب هوك: {webhook_url}/{Config.BOT_TOKEN}")
+        
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            webhook_url=f"{webhook_url}/{Config.BOT_TOKEN}",
+            url_path=Config.BOT_TOKEN,
+            drop_pending_updates=True,
+            secret_token='RENDER_WEBHOOK_SECRET',  # اختياري لكن موصى به
+            on_startup=on_startup
+        )
             
     except Exception as e:
         logger.critical(f"🔥 تعطل البوت: {str(e)}")
