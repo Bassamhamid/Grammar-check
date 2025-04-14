@@ -64,9 +64,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action, user_text = query.data.split("|", 1)
 
     if action == "correct":
-        prompt = f"صحح النص النحوي التالي بدون تغيير معناه:\n{user_text}"
-    elif action == "rewrite":
-        prompt = f"أعد صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ على المعنى:\n{user_text}"
+    prompt = f"""قم بتصحيح الأخطاء النحوية فقط في النص التالي بدون شرح وبدون إضافة أي كلمات أو تعليقات أو ترجمة، وأعد إرسال النص المصحح فقط:
+
+{text}"""
+elif action == "rewrite":
+    prompt = f"""قم بإعادة صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ الكامل على المعنى، بدون شرح وبدون إضافة أي تعليقات أو ترجمة. أرسل النص المعاد صياغته فقط:
+
+{text}"""
     else:
         await query.edit_message_text("طلب غير معروف.")
         return
