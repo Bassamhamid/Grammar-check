@@ -1,25 +1,29 @@
 import firebase_admin
 from firebase_admin import credentials, db
 from config import Config
+import logging
+
+# تهيئة Firebase (نسخة معدلة)
+_firebase_app = None
 
 def initialize_firebase():
-    # لا حاجة لملف JSON، نستخدم المتغير مباشرة
-    cred = credentials.Certificate(Config.FIREBASE_SERVICE_ACCOUNT)
-    firebase_admin.initialize_app(cred, {
-        'databaseURL': Config.FIREBASE_DB_URL
-    })
+    global _firebase_app
+    try:
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(Config.FIREBASE_SERVICE_ACCOUNT)
+            _firebase_app = firebase_admin.initialize_app(cred, {
+                'databaseURL': Config.FIREBASE_DB_URL
+            })
+            logging.info("✅ Firebase initialized successfully")
+    except Exception as e:
+        logging.error(f"🔥 Failed to initialize Firebase: {str(e)}")
+        raise
 
 class FirebaseDB:
     def __init__(self):
-        self.ref = db.reference('/arabic_bot_users')  # يمكنك تغيير المسار هنا
-        
-    def update_user(self, user_id: int, data: dict):
-        self.ref.child(str(user_id)).update(data)
-    
-    def get_user(self, user_id: int) -> dict:
-        return self.ref.child(str(user_id)).get() or {
-            'request_count': 0,
-            'last_request': None,
-            'reset_time': None,
-            'is_premium': False
-        }
+        initialize_firebase()  # تأكد من التهيئة أولاً
+        try:
+            self.ref = db.reference('/arabic_bot_users')
+        except Exception as e:
+            logging.error(f"🚨 Failed to create database reference: {str(e)}")
+            raise
