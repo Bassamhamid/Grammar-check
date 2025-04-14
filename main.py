@@ -5,6 +5,7 @@ from firebase_db import initialize_firebase
 from handlers.start import start
 from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
+from handlers.premium import setup as setup_premium
 import logging
 
 # تهيئة النظام
@@ -21,11 +22,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def initialize_system():
     try:
-        # 1. تهيئة Firebase أولاً
         initialize_firebase()
         logger.info("✅ Firebase initialized successfully")
         
-        # 2. التحقق من الإعدادات
         if not Config.BOT_TOKEN:
             raise ValueError("BOT_TOKEN is missing")
         if not Config.FIREBASE_DB_URL:
@@ -38,10 +37,7 @@ def initialize_system():
 
 def main():
     try:
-        # تهيئة النظام
         initialize_system()
-        
-        # بناء التطبيق
         app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
         # إضافة المعالجات
@@ -50,7 +46,9 @@ def main():
         app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite)$"))
         app.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
         
-        # معالج الأخطاء
+        # إضافة معالجات API الشخصي
+        setup_premium(app)
+        
         app.add_error_handler(error_handler)
         
         logger.info("🤖 Starting bot...")
