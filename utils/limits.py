@@ -1,39 +1,36 @@
+from firebase_db import FirebaseDB
 import time
 from config import Config
 
 class UsageLimiter:
     def __init__(self):
-        self.user_data = {}
-        self.CHAR_LIMIT = Config.CHAR_LIMIT
-        self.REQUEST_LIMIT = Config.REQUEST_LIMIT
-        self.RESET_HOURS = Config.RESET_HOURS
+        self.db = FirebaseDB()  # استبدل التخزين المحلي بـ Firebase
 
     def check_limits(self, user_id: int) -> tuple:
+        user = self.db.get_user(user_id)
         current_time = time.time()
         
-        if user_id not in self.user_data:
-            self.user_data[user_id] = {
-                "count": 0,
-                "reset_time": current_time + (self.RESET_HOURS * 3600)
-            }
+        if user['reset_time'] and current_time > user['reset_time']:
+            self.db.update_user(user_id, {
+                'request_count': 0,
+                'reset_time': current_time + (Config.RESET_HOURS * 3600)
+            })
+            return True, 0
         
-        user = self.user_data[user_id]
-        
-        # Check if reset time passed
-        if current_time > user["reset_time"]:
-            user["count"] = 0
-            user["reset_time"] = current_time + (self.RESET_HOURS * 3600)
-        
-        return user["count"] < self.REQUEST_LIMIT, user["reset_time"] - current_time
+        remaining = Config.REQUEST_LIMIT - user['request_count']
+        time_left = max(0, (user['reset_time'] - current_time))
+        return remaining > 0, time_left
 
     def increment_usage(self, user_id: int):
-        if user_id not in self.user_data:
-            self.check_limits(user_id)  # Initialize if not exists
-        self.user_data[user_id]["count"] += 1
-
-    def get_remaining_uses(self, user_id: int) -> int:
-        if user_id not in self.user_data:
-            return self.REQUEST_LIMIT
-        return self.REQUEST_LIMIT - self.user_data[user_id]["count"]
-
-limiter = UsageLimiter()
+        user = self.db.get_user(user_id)
+        new_count = user['request_count'] + 1
+        
+        update_data = {
+            'request_count': new_count,
+            'last_request': int(time.time())
+        }
+        
+        if not user['reset_time']:
+            update_data['reset_time'] = time.time() + (Config.RESET_HOURS * 3600)
+        
+        self.db.update_user(user_id, update_data)
