@@ -19,8 +19,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_premium = limiter.is_premium_user(user_id)
         
         # الحصول على بيانات المستخدم مع تحديد الحدود
-        allowed, time_left, char_limit = limiter.check_limits(user_id)
         user_data = limiter.db.get_user(user_id)
+        request_count = user_data.get('request_count', 0)
         
         # حساب الوقت المتبقي
         current_time = time.time()
@@ -28,36 +28,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         time_left = max(0, reset_time - current_time)
         hours_left = max(0, int(time_left // 3600))
         
-        # تحديد الحدود للعرض
-        if is_premium:
-            request_limit = Config.PREMIUM_REQUEST_LIMIT
-            remaining_uses = request_limit - user_data.get('request_count', 0)
-            limit_msg = f"🌟 (حساب مميز) الطلبات المتبقية: {remaining_uses}/{request_limit}"
-            char_msg = f"📝 الحد الأقصى للنص: {Config.PREMIUM_CHAR_LIMIT} حرفاً"
-        else:
-            request_limit = Config.REQUEST_LIMIT
-            remaining_uses = request_limit - user_data.get('request_count', 0)
-            limit_msg = f"📊 الطلبات المتبقية: {remaining_uses}/{request_limit}"
-            char_msg = f"📝 الحد الأقصى للنص: {Config.CHAR_LIMIT} حرفاً"
-
         # رسالة الترحيب المعدلة
         welcome_msg = (
             "✨ مرحباً بك في بوت التصحيح النحوي ✨\n\n"
-            f"{limit_msg}\n"
-            f"⏳ وقت التجديد: بعد {hours_left} ساعة\n"
-            f"{char_msg}\n\n"
-            "🎯 الخدمات المتاحة:\n"
-            "- تصحيح الأخطاء النحوية والإملائية\n"
-            "- إعادة صياغة النصوص باحترافية\n\n"
-            "💡 لتفعيل API الخاص بك والحصول على:\n"
+            "📋 خطة الاستخدام الحالية:\n"
+            f"- عدد الطلبات اليومية: {Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT}\n"
+            f"- الطلبات المتبقية: {Config.PREMIUM_REQUEST_LIMIT - request_count if is_premium else Config.REQUEST_LIMIT - request_count}\n"
+            f"- الحد الأقصى للنص: {Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT} حرفاً\n"
+            f"- وقت تجديد الطلبات: بعد {hours_left} ساعة\n\n"
+            "💎 لترقية حسابك واستخدام API الخاص:\n"
+            "أرسل الأمر التالي مع مفتاحك:\n"
+            "/setapi ثم ضع مفتاح API الخاص بك\n\n"
+            "مثال:\n"
+            "/setapi sk-123456789abcdef\n\n"
+            "مميزات API الشخصي:\n"
             f"- {Config.PREMIUM_REQUEST_LIMIT} طلب يومياً\n"
-            f"- حد {Config.PREMIUM_CHAR_LIMIT} حرفاً للنص\n"
-            "أرسل: /setapi <api_key>"
+            f"- حد {Config.PREMIUM_CHAR_LIMIT} حرفاً للنص"
         )
         
-        # إضافة زر البدء إن أردت
+        # زر البدء مع تعديل callback_data
         keyboard = [
-            [InlineKeyboardButton("🚀 بدء الاستخدام", callback_data="start_using")]
+            [InlineKeyboardButton("📝 بدء المعالجة", callback_data="process_text")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -71,7 +62,19 @@ async def handle_start_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         query = update.callback_query
         await query.answer()
-        await query.edit_message_text("📝 يرجى إرسال النص الذي تريد معالجته:")
+        
+        # إرسال رسالة توجيهية مع مثال للاستخدام
+        guide_msg = (
+            "📌 كيفية الاستخدام:\n\n"
+            "1. أرسل النص الذي تريد معالجته مباشرة\n"
+            "2. اختر الخدمة المطلوبة من القائمة\n\n"
+            "مثال:\n"
+            "يمكنك تصحيح هذا النص:\n"
+            "\"كانت الجو جميله في الخارج\""
+        )
+        
+        await query.edit_message_text(guide_msg)
+        
     except Exception as e:
         logger.error(f"Error in start button: {str(e)}")
         await query.edit_message_text("⚠️ حدث خطأ أثناء المعالجة.")
