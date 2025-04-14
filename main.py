@@ -33,11 +33,13 @@ def initialize_system():
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
         
-        required_vars = ['BOT_TOKEN', 'WEBHOOK_URL', 'PORT']
-        for var in required_vars:
-            if not getattr(Config, var, None):
-                raise ValueError(f"المتغير {var} غير موجود في الإعدادات")
-                
+        if not Config.BOT_TOKEN:
+            raise ValueError("BOT_TOKEN مفقود")
+        if not hasattr(Config, 'PORT'):
+            raise ValueError("PORT مفقود في الإعدادات")
+        if not hasattr(Config, 'WEBHOOK_URL'):
+            raise ValueError("WEBHOOK_URL مفقود في الإعدادات")
+            
         logger.info("✅ تم التحقق من الإعدادات بنجاح")
     except Exception as e:
         logger.critical(f"❌ فشل تهيئة النظام: {str(e)}")
@@ -52,10 +54,6 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
     setup_premium(application)
 
-async def on_startup(app):
-    """وظيفة تنفيذية عند بدء التشغيل"""
-    await app.bot.set_webhook(f"{Config.WEBHOOK_URL}/{Config.BOT_TOKEN}")
-
 def main():
     try:
         initialize_system()
@@ -64,7 +62,7 @@ def main():
         setup_handlers(app)
         app.add_error_handler(error_handler)
         
-        # إعدادات Webhook الأساسية
+        # إعدادات Webhook (بدون on_startup)
         webhook_url = Config.WEBHOOK_URL.rstrip('/')
         port = int(Config.PORT)
         
@@ -76,9 +74,7 @@ def main():
             port=port,
             webhook_url=f"{webhook_url}/{Config.BOT_TOKEN}",
             url_path=Config.BOT_TOKEN,
-            drop_pending_updates=True,
-            secret_token='RENDER_WEBHOOK_SECRET',  # اختياري لكن موصى به
-            on_startup=on_startup
+            drop_pending_updates=True
         )
             
     except Exception as e:
