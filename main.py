@@ -79,8 +79,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton("تصحيح نحوي", callback_data=f"correct|{user_text}"),
-            InlineKeyboardButton("إعادة صياغة", callback_data=f"rewrite|{user_text}")
+            InlineKeyboardButton("تصحيح نحوي", callback_data=f"correct;{user_text}"),
+            InlineKeyboardButton("إعادة صياغة", callback_data=f"rewrite;{user_text}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -92,7 +92,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    action, user_text = query.data.split("|", 1)
+    action, user_text = query.data.split(";", 1)
 
     # إعداد الـ prompt بناءً على الاختيار
     if action == "correct":
