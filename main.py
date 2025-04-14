@@ -22,9 +22,17 @@ def query_openrouter(prompt):
     }
 
     data = {
-        "model": "mistralai/mistral-7b-instruct:free",
+        "model": "meta-llama/llama-4-maverick:free",
         "messages": [
-            {"role": "user", "content": prompt}
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
         ]
     }
 
@@ -64,11 +72,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action, user_text = query.data.split("|", 1)
 
     if action == "correct":
-        prompt = f"""قم بتصحيح الأخطاء النحوية فقط في النص التالي بدون شرح وبدون إضافة أي كلمات أو تعليقات أو ترجمة. أرسل النص المصحح فقط:
+        prompt = f"""صحح الأخطاء النحوية والإملائية فقط في النص التالي، وأرسل النص المصحح فقط بدون أي شرح أو تعليقات:
 
 {user_text}"""
     elif action == "rewrite":
-        prompt = f"""قم بإعادة صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ الكامل على المعنى، بدون شرح وبدون إضافة أي تعليقات أو ترجمة. أرسل النص المعاد صياغته فقط:
+        prompt = f"""أعد صياغة النص التالي بلغة عربية فصحى سليمة مع الحفاظ على نفس المعنى، وأرسل النص المعاد صياغته فقط بدون أي شرح أو تعليقات:
 
 {user_text}"""
     else:
