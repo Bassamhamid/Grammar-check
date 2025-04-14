@@ -9,7 +9,7 @@ from telegram.ext import (
 )
 from config import Config
 from firebase_db import initialize_firebase
-from handlers.start import start, handle_process_button
+from handlers.start import start, show_normal_usage, show_api_usage, back_to_start, setup_start_handlers
 from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
 from handlers.premium import setup as setup_premium
@@ -33,25 +33,27 @@ def initialize_system():
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
         
-        if not Config.BOT_TOKEN:
-            raise ValueError("BOT_TOKEN مفقود")
-        if not hasattr(Config, 'PORT'):
-            raise ValueError("PORT مفقود في الإعدادات")
-        if not hasattr(Config, 'WEBHOOK_URL'):
-            raise ValueError("WEBHOOK_URL مفقود في الإعدادات")
-            
+        required_vars = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL']
+        for var in required_vars:
+            if not getattr(Config, var, None):
+                raise ValueError(f"المتغير {var} غير موجود في الإعدادات")
+                
         logger.info("✅ تم التحقق من الإعدادات بنجاح")
     except Exception as e:
         logger.critical(f"❌ فشل تهيئة النظام: {str(e)}")
         raise
 
-def setup_handlers(application):
+def setup_all_handlers(application):
     """تسجيل جميع معالجات البوت"""
-    application.add_handler(CommandHandler("start", start))
+    # معالجات من start.py
+    setup_start_handlers(application)
+    
+    # معالجات أخرى
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(CallbackQueryHandler(handle_process_button, pattern="^start_processing$"))
     application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite|cancel_api|use_api)$"))
     application.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
+    
+    # معالجات API الشخصي
     setup_premium(application)
 
 def main():
@@ -59,10 +61,10 @@ def main():
         initialize_system()
         app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
-        setup_handlers(app)
+        setup_all_handlers(app)
         app.add_error_handler(error_handler)
         
-        # إعدادات Webhook (بدون on_startup)
+        # إعدادات Webhook
         webhook_url = Config.WEBHOOK_URL.rstrip('/')
         port = int(Config.PORT)
         
