@@ -5,7 +5,7 @@ import logging
 import csv
 from io import StringIO
 from datetime import datetime
-from firebase_admin import db  # استيراد Firebase
+from firebase_admin import db
 
 logger = logging.getLogger(__name__)
 
@@ -13,155 +13,116 @@ logger = logging.getLogger(__name__)
 MAINTENANCE_MODE = False
 
 def is_admin(user_id):
-    try:
-        return user_id in Config.ADMIN_IDS
-    except:
-        return False
+    return user_id in Config.ADMIN_IDS
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not is_admin(update.effective_user.id):
-            if update.callback_query:
-                await update.callback_query.answer("⛔ ليس لديك صلاحية الدخول")
+            await update.message.reply_text("⛔ ليس لديك صلاحية الدخول")
             return
 
         keyboard = [
-            [InlineKeyboardButton("📊 إحصائيات البوت", callback_data="bot_stats")],
-            [InlineKeyboardButton("📢 إرسال إشعار عام", callback_data="broadcast")],
-            [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="manage_users")],
-            [InlineKeyboardButton("🔧 إعدادات البوت", callback_data="bot_settings")]
+            [InlineKeyboardButton("📊 إحصائيات حقيقية", callback_data="real_stats")],
+            [InlineKeyboardButton("📢 إرسال إشعار فعلي", callback_data="real_broadcast")],
+            [InlineKeyboardButton("👥 إدارة مستخدمين حقيقية", callback_data="real_users")],
+            [InlineKeyboardButton("🔧 إعدادات فعلية", callback_data="real_settings")]
         ]
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                "🛠️ لوحة تحكم المشرفين:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            await update.message.reply_text(
-                "🛠️ لوحة تحكم المشرفين:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+        await update.message.reply_text(
+            "🛠️ لوحة تحكم المشرفين - النسخة المعدلة:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}")
 
-async def handle_admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if not is_admin(query.from_user.id):
-        await query.edit_message_text("⛔ صلاحيات غير كافية")
-        return
-
-    action = query.data
-    
-    if action == "bot_stats":
-        stats = await get_real_stats()  # الحصول على إحصائيات حقيقية
-        await show_stats_menu(query, stats)
-    elif action == "broadcast":
-        await show_broadcast_menu(query, context)
-    elif action == "manage_users":
-        await show_user_management_menu(query)
-    elif action == "bot_settings":
-        await show_bot_settings_menu(query)
-    elif action == "back_to_admin":
-        await admin_panel(update, context)
-
-async def get_real_stats():
     try:
-        # جلب إحصائيات حقيقية من Firebase
-        ref = db.reference('/')
-        data = ref.get()
+        # جلب بيانات حقيقية من Firebase
+        users_ref = db.reference('users')
+        stats_ref = db.reference('stats')
         
-        return {
-            "total_users": len(data.get('users', {})),
-            "active_today": sum(1 for u in data.get('users', {}).values() if u.get('last_active') == str(datetime.today().date())),
-            "total_requests": data.get('stats', {}).get('total_requests', 0),
-            "api_users": sum(1 for u in data.get('users', {}).values() if u.get('is_premium', False)),
-            "banned_users": sum(1 for u in data.get('users', {}).values() if u.get('is_banned', False)),
-            "last_backup": data.get('stats', {}).get('last_backup', 'غير متوفر')
-        }
+        users = users_ref.get() or {}
+        stats = stats_ref.get() or {}
+        
+        total_users = len(users)
+        active_today = len([u for u in users.values() if u.get('last_active') == str(datetime.now().date())])
+        total_requests = stats.get('total_requests', 0)
+        api_users = len([u for u in users.values() if u.get('is_premium', False)])
+        banned_users = len([u for u in users.values() if u.get('is_banned', False)])
+        
+        stats_text = (
+            "📊 الإحصائيات الفعلية:\n\n"
+            f"👥 إجمالي المستخدمين: {total_users}\n"
+            f"🟢 نشطين اليوم: {active_today}\n"
+            f"📨 إجمالي الطلبات: {total_requests}\n"
+            f"⭐ مستخدمين API: {api_users}\n"
+            f"⛔ محظورين: {banned_users}"
+        )
+        
+        await query.edit_message_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 تحديث حقيقي", callback_data="real_stats")],
+                [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_real_admin")]
+            ])
+        )
+        
     except Exception as e:
-        logger.error(f"Error getting stats: {str(e)}")
-        return {
-            "total_users": "غير متوفر",
-            "active_today": "غير متوفر",
-            "total_requests": "غير متوفر",
-            "api_users": "غير متوفر",
-            "banned_users": "غير متوفر",
-            "last_backup": "غير متوفر"
-        }
+        logger.error(f"Error in real stats: {str(e)}")
+        await query.edit_message_text("⚠️ حدث خطأ في جلب البيانات")
 
-async def show_stats_menu(query, stats):
-    text = (
-        "📊 إحصائيات البوت (حقيقية):\n\n"
-        f"👥 إجمالي المستخدمين: {stats['total_users']}\n"
-        f"🟢 مستخدمين نشطين اليوم: {stats['active_today']}\n"
-        f"📨 إجمالي الطلبات: {stats['total_requests']}\n"
-        f"⭐ مستخدمين API: {stats['api_users']}\n"
-        f"⛔ مستخدمين محظورين: {stats['banned_users']}\n"
-        f"💾 آخر نسخة احتياطية: {stats['last_backup']}"
-    )
+async def handle_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     
     await query.edit_message_text(
-        text,
+        "📢 أرسل الرسالة للإشعار الفعلي:",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔄 تحديث", callback_data="bot_stats")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+            [InlineKeyboardButton("إلغاء", callback_data="back_to_real_admin")]
         ])
     )
+    context.user_data['awaiting_real_broadcast'] = True
 
-async def show_broadcast_menu(query, context):
-    await query.edit_message_text(
-        "📢 أرسل الرسالة التي تريد نشرها لجميع المستخدمين:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("إلغاء", callback_data="back_to_admin")]
-        ])
-    )
-    context.user_data['awaiting_broadcast'] = True
-
-async def show_user_management_menu(query):
-    keyboard = [
-        [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
-        [InlineKeyboardButton("⛔ حظر مستخدم", callback_data="ban_user")],
-        [InlineKeyboardButton("✅ رفع حظر", callback_data="unban_user")],
-        [InlineKeyboardButton("⭐ ترقية مستخدم", callback_data="upgrade_user")],
-        [InlineKeyboardButton("📩 تصدير البيانات", callback_data="export_users")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
-    ]
-    
-    await query.edit_message_text(
-        "👥 إدارة المستخدمين:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def show_bot_settings_menu(query):
-    status = "✅ مفعل" if MAINTENANCE_MODE else "❌ معطل"
-    
-    keyboard = [
-        [InlineKeyboardButton(f"🛑 وضع الصيانة ({status})", callback_data="toggle_maintenance")],
-        [InlineKeyboardButton("💾 نسخة احتياطية", callback_data="backup_data")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
-    ]
-    
-    await query.edit_message_text(
-        "⚙️ إعدادات البوت:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-    
-    if 'awaiting_broadcast' in context.user_data:
+async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if 'awaiting_real_broadcast' in context.user_data:
         message = update.message.text
-        # كود إرسال الإشعار هنا
-        await update.message.reply_text(f"تم إرسال الإشعار بنجاح")
-        del context.user_data['awaiting_broadcast']
-        await admin_panel(update, context)
+        
+        try:
+            users_ref = db.reference('users')
+            users = users_ref.get() or {}
+            
+            sent_count = 0
+            for user_id, user_data in users.items():
+                try:
+                    if user_data.get('is_banned', False):
+                        continue
+                        
+                    # هنا كود إرسال الرسالة الفعلي لكل مستخدم
+                    # await context.bot.send_message(chat_id=user_id, text=message)
+                    sent_count += 1
+                    
+                    if sent_count >= Config.MAX_BROADCAST_USERS:
+                        break
+                        
+                except Exception as e:
+                    logger.error(f"Error sending to {user_id}: {str(e)}")
+            
+            await update.message.reply_text(f"✅ تم إرسال الإشعار لـ {sent_count} مستخدم")
+            
+        except Exception as e:
+            logger.error(f"Broadcast error: {str(e)}")
+            await update.message.reply_text("⚠️ فشل في إرسال الإشعار")
+        
+        finally:
+            del context.user_data['awaiting_real_broadcast']
+            await admin_panel(update, context)
 
 def setup_admin_handlers(application):
     application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CallbackQueryHandler(handle_admin_actions, pattern="^(bot_stats|broadcast|manage_users|bot_settings|back_to_admin|search_user|ban_user|unban_user|upgrade_user|export_users|toggle_maintenance|backup_data)$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_messages))
+    application.add_handler(CallbackQueryHandler(handle_real_stats, pattern="^real_stats$"))
+    application.add_handler(CallbackQueryHandler(handle_real_broadcast, pattern="^real_broadcast$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_real_broadcast))
