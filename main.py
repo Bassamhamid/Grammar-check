@@ -4,6 +4,7 @@ import requests
 import os
 import json
 import time
+import urllib.parse
 
 # متغيرات البيئة
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -15,7 +16,7 @@ PORT = int(os.environ.get("PORT", "10000"))
 
 # متغير لتخزين عدد الاستخدامات ووقت أول استخدام
 user_usage = {}
-USAGE_LIMIT = 10  # حد الاستخدامات اليومي
+USAGE_LIMIT = 3  # حد الاستخدامات اليومي
 CHAR_LIMIT = 100  # حد الحروف
 
 # دالة استدعاء نموذج OpenRouter
@@ -77,10 +78,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # زيادة عدد المحاولات
     user_usage[user_id]["count"] += 1
 
+    # اختصار النصوص في بيانات الأزرار
+    max_button_length = 64  # الحد الأقصى لطول النص في بيانات الأزرار
+    shortened_user_text = urllib.parse.quote(user_text[:max_button_length])  # تشفير النص
+
     keyboard = [
         [
-            InlineKeyboardButton("تصحيح نحوي", callback_data=f"correct;{user_text}"),
-            InlineKeyboardButton("إعادة صياغة", callback_data=f"rewrite;{user_text}")
+            InlineKeyboardButton("تصحيح نحوي", callback_data=f"correct|{shortened_user_text}"),
+            InlineKeyboardButton("إعادة صياغة", callback_data=f"rewrite|{shortened_user_text}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -92,7 +97,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    action, user_text = query.data.split(";", 1)
+    action, encoded_user_text = query.data.split("|", 1)
+    user_text = urllib.parse.unquote(encoded_user_text)  # فك تشفير النص
 
     # إعداد الـ prompt بناءً على الاختيار
     if action == "correct":
