@@ -23,7 +23,7 @@ BOT_SETTINGS = {
 }
 
 def is_admin(user_id):
-    return user_id in Config.ADMIN_IDS
+    return user_id in Config.ADMIN_IDS if isinstance(Config.ADMIN_IDS, (list, tuple)) else False
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
