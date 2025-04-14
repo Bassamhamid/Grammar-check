@@ -3,6 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 import requests
 import os
 import json
+import time
 
 # متغيرات البيئة
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -11,6 +12,11 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 SITE_URL = os.getenv("SITE_URL", "")
 SITE_TITLE = os.getenv("SITE_TITLE", "Arabic Text Bot")
 PORT = int(os.environ.get("PORT", "10000"))
+
+# متغير لتخزين عدد الاستخدامات ووقت أول استخدام
+user_usage = {}
+USAGE_LIMIT = 10  # حد الاستخدامات اليومي
+CHAR_LIMIT = 100  # حد الحروف
 
 # دالة استدعاء نموذج OpenRouter
 def query_openrouter(prompt):
@@ -24,15 +30,7 @@ def query_openrouter(prompt):
     data = {
         "model": "meta-llama/llama-4-maverick:free",
         "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt
-                    }
-                ]
-            }
+            {"role": "user", "content": prompt}
         ]
     }
 
@@ -54,6 +52,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
+    # التحقق من حد الحروف
+    if len(user_text) > CHAR_LIMIT:
+        await update.message.reply_text(f"عذرًا، الحد الأقصى للنص هو {CHAR_LIMIT} حرفًا.")
+        return
+
+    user_id = update.message.from_user.id
+    current_time = time.time()
+
+    # التحقق من عدد المحاولات ووقت آخر محاولة
+    if user_id not in user_usage:
+        user_usage[user_id] = {"count": 0, "first_use": current_time}
+
+    # إعادة تعيين العداد بعد 20 ساعة
+    if current_time - user_usage[user_id]["first_use"] > 20 * 60 * 60:
+        user_usage[user_id]["count"] = 0
+        user_usage[user_id]["first_use"] = current_time
+
+    # التحقق من الحد اليومي للاستخدام
+    if user_usage[user_id]["count"] >= USAGE_LIMIT:
+        await update.message.reply_text("عذرًا، لقد وصلت إلى الحد الأقصى من المحاولات لليوم.")
+        return
+
+    # زيادة عدد المحاولات
+    user_usage[user_id]["count"] += 1
+
     keyboard = [
         [
             InlineKeyboardButton("تصحيح نحوي", callback_data=f"correct|{user_text}"),
@@ -71,6 +94,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     action, user_text = query.data.split("|", 1)
 
+    # إعداد الـ prompt بناءً على الاختيار
     if action == "correct":
         prompt = f"""صحح الأخطاء النحوية والإملائية فقط في النص التالي، وأرسل النص المصحح فقط بدون أي شرح أو تعليقات:
 
@@ -85,7 +109,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         result = query_openrouter(prompt)
-        await query.edit_message_text(f"**النتيجة:**\n{result}")
+        await query.edit_message_text(
+            f"<b>النتيجة:</b>\n{result}",
+            parse_mode="HTML"
+        )
     except Exception as e:
         await query.edit_message_text(f"حدث خطأ أثناء الاتصال بالنموذج:\n{e}")
 
@@ -103,4 +130,4 @@ app.run_webhook(
     port=PORT,
     url_path=TELEGRAM_TOKEN,
     webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
-)
+    )
