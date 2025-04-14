@@ -37,9 +37,9 @@ class Config:
     # Timeout Settings
     REQUEST_TIMEOUT = timedelta(seconds=30)
 
-    # Admin Settings - النسخة المحسنة
-    @classmethod
-    def get_admin_ids(cls):
+    # Admin Settings - الطريقة الصحيحة
+    @staticmethod
+    def get_admin_ids():
         admin_ids = os.getenv("ADMIN_IDS", "").strip()
         if not admin_ids:
             return []
@@ -50,6 +50,6 @@ class Config:
             print(f"Error parsing ADMIN_IDS: {e}")
             return []
 
-    ADMIN_IDS = get_admin_ids()
+    ADMIN_IDS = [int(id) for id in os.getenv("ADMIN_IDS", "123456789").split(',') if id.strip().isdigit()]
     MAX_BROADCAST_USERS = int(os.getenv("MAX_BROADCAST_USERS", "1000"))
     BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
