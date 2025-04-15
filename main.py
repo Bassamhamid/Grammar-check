@@ -40,7 +40,7 @@ def initialize_system():
         start_time = time.time()
         
         # Validate configuration
-        Config.validate_config()
+        Config.validate_config()  # تم تصحيح اسم الدالة
         logger.info("✅ Configuration validated successfully")
         
         # Initialize Firebase
@@ -56,7 +56,7 @@ def initialize_system():
         logger.info("💡 Troubleshooting Tips:")
         logger.info("1. Check all required environment variables are set on Render")
         logger.info("2. Verify FIREBASE_DATABASE_URL is correct")
-        logger.info("3. Ensure FIREBASE_SERVICE_ACCOUNT_JSON is valid JSON")
+        logger.info(f"3. Current FIREBASE_DATABASE_URL: {getattr(Config, 'FIREBASE_DATABASE_URL', 'NOT SET')}")
         raise
 
 def setup_handlers(application):
