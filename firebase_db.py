@@ -3,7 +3,8 @@ from firebase_admin import credentials, db
 from config import Config
 import logging
 import time
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Dict, Optional, List
 
 # Initialize Firebase
 _firebase_app = None
@@ -32,9 +33,10 @@ class FirebaseDB:
         self.users_ref = db.reference('/users')
         self.stats_ref = db.reference('/stats')
         self.settings_ref = db.reference('/settings')
+        self.logs_ref = db.reference('/logs')
 
     def get_user(self, user_id: int) -> dict:
-        """Get user data by ID"""
+        """Get user data by ID with default values"""
         default_data = {
             'request_count': 0,
             'last_request': None,
@@ -43,7 +45,8 @@ class FirebaseDB:
             'is_banned': False,
             'last_active': None,
             'timestamp': time.time(),
-            'username': None
+            'username': None,
+            'started_chat': True  # Default to True assuming user has started chat
         }
         try:
             snapshot = self.users_ref.child(str(user_id)).get()
@@ -53,52 +56,80 @@ class FirebaseDB:
             return default_data
 
     def get_user_by_username(self, username: str) -> Optional[dict]:
-        """Get user data by username"""
+        """Get user data by username (case-insensitive)"""
         try:
             all_users = self.get_all_users()
-            return next((u for u in all_users.values() if u.get('username') == username), None)
+            username = username.lower().strip('@')
+            return next(
+                (u for u in all_users.values() 
+                 if u.get('username', '').lower() == username),
+                None
+            )
         except Exception as e:
             logging.error(f"🚨 Error in get_user_by_username: {str(e)}")
             return None
 
-    def update_user(self, user_id: int, data: dict):
-        """Update user data"""
+    def update_user(self, user_id: int, data: dict) -> bool:
+        """Update user data with timestamp"""
         try:
             data['timestamp'] = time.time()
             self.users_ref.child(str(user_id)).update(data)
+            return True
         except Exception as e:
             logging.error(f"🚨 Error in update_user: {str(e)}")
-            raise
+            return False
 
     def get_stats(self) -> dict:
-        """Get bot statistics"""
+        """Get bot statistics with default values"""
+        default_stats = {
+            'total_requests': 0,
+            'daily_requests': 0,
+            'last_reset': time.time(),
+            'total_users': 0,
+            'active_today': 0,
+            'premium_users': 0,
+            'banned_users': 0,
+            'last_updated': 0
+        }
         try:
             snapshot = self.stats_ref.get()
-            return snapshot or {
-                'total_requests': 0,
-                'daily_requests': 0,
-                'last_reset': time.time()
-            }
+            return {**default_stats, **snapshot} if snapshot else default_stats
         except Exception as e:
             logging.error(f"🚨 Error in get_stats: {str(e)}")
-            return {'total_requests': 0, 'daily_requests': 0}
+            return default_stats
 
-    def update_stats(self, data: dict):
-        """Update bot statistics"""
+    def update_stats(self) -> bool:
+        """Update statistics in Firebase"""
         try:
-            self.stats_ref.update(data)
+            users = self.get_all_users()
+            today = datetime.now().date().isoformat()
+            
+            stats = {
+                'total_users': len(users),
+                'active_today': sum(
+                    1 for u in users.values() 
+                    if u.get('last_active', '').startswith(today)
+                ),
+                'premium_users': sum(1 for u in users.values() if u.get('is_premium')),
+                'banned_users': sum(1 for u in users.values() if u.get('is_banned')),
+                'last_updated': time.time()
+            }
+            
+            self.stats_ref.update(stats)
+            return True
         except Exception as e:
-            logging.error(f"🚨 Error in update_stats: {str(e)}")
-            raise
+            logging.error(f"🚨 Error updating stats: {str(e)}")
+            return False
 
     def get_settings(self) -> dict:
-        """Get bot settings"""
+        """Get bot settings with default values"""
         default_settings = {
             'maintenance_mode': False,
             'normal_text_limit': Config.CHAR_LIMIT,
             'premium_text_limit': Config.PREMIUM_CHAR_LIMIT,
             'daily_limit': Config.REQUEST_LIMIT,
-            'premium_daily_limit': Config.PREMIUM_REQUEST_LIMIT
+            'premium_daily_limit': Config.PREMIUM_REQUEST_LIMIT,
+            'last_updated': time.time()
         }
         try:
             snapshot = self.settings_ref.get()
@@ -108,8 +139,9 @@ class FirebaseDB:
             return default_settings
 
     def update_settings(self, settings: dict) -> bool:
-        """Update bot settings"""
+        """Update bot settings with timestamp"""
         try:
+            settings['last_updated'] = time.time()
             self.settings_ref.update(settings)
             return True
         except Exception as e:
@@ -117,20 +149,35 @@ class FirebaseDB:
             return False
 
     def get_all_users(self) -> Dict[str, dict]:
-        """Get all users"""
+        """Get all users with empty dict as fallback"""
         try:
             return self.users_ref.get() or {}
         except Exception as e:
             logging.error(f"🚨 Error in get_all_users: {str(e)}")
             return {}
 
+    def get_recent_users(self, limit: int = 50) -> Dict[str, dict]:
+        """Get recent users ordered by timestamp"""
+        try:
+            users = self.users_ref.order_by_child('timestamp').limit_to_last(limit).get()
+            return users or {}
+        except Exception as e:
+            logging.error(f"🚨 Error getting recent users: {str(e)}")
+            return {}
+
     def ban_user(self, user_id: int) -> bool:
-        """Ban a user"""
-        return self._update_user_status(user_id, True)
+        """Ban user and log the action"""
+        success = self._update_user_status(user_id, True)
+        if success:
+            self.log_action(f"banned user {user_id}")
+        return success
 
     def unban_user(self, user_id: int) -> bool:
-        """Unban a user"""
-        return self._update_user_status(user_id, False)
+        """Unban user and log the action"""
+        success = self._update_user_status(user_id, False)
+        if success:
+            self.log_action(f"unbanned user {user_id}")
+        return success
 
     def _update_user_status(self, user_id: int, is_banned: bool) -> bool:
         """Internal method to update user ban status"""
@@ -142,4 +189,33 @@ class FirebaseDB:
             return True
         except Exception as e:
             logging.error(f"🚨 Error in _update_user_status: {str(e)}")
+            return False
+
+    def log_action(self, action: str) -> bool:
+        """Log admin actions"""
+        try:
+            self.logs_ref.push().set({
+                'action': action,
+                'timestamp': time.time(),
+                'time_str': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
+            return True
+        except Exception as e:
+            logging.error(f"🚨 Error logging action: {str(e)}")
+            return False
+
+    def reset_daily_limits(self) -> bool:
+        """Reset daily request limits for all users"""
+        try:
+            users = self.get_all_users()
+            for user_id in users:
+                self.users_ref.child(str(user_id)).update({
+                    'request_count': 0,
+                    'reset_time': time.time() + (Config.RESET_HOURS * 3600),
+                    'timestamp': time.time()
+                })
+            self.log_action("reset daily limits for all users")
+            return True
+        except Exception as e:
+            logging.error(f"🚨 Error resetting daily limits: {str(e)}")
             return False
