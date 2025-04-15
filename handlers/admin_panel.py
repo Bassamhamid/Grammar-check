@@ -104,7 +104,8 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
         return
         
     if not context.user_data.get('broadcast_mode'):
-        return
+        # إضافة هذا الشرط لمنع التعارض مع معالجات النصوص
+        return await handle_normal_message(update, context)
 
     context.user_data['broadcast_message'] = update.message.text
     context.user_data['broadcast_mode'] = False
