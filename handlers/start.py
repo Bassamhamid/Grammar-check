@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler
+from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 from utils.limits import limiter
 from handlers.subscription import check_subscription, send_subscription_message
 from config import Config
@@ -7,6 +7,9 @@ import time
 import logging
 
 logger = logging.getLogger(__name__)
+
+# حالة المستخدم
+NORMAL_TEXT_INPUT = 1
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -18,18 +21,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
         
-        # تعيين القيم الافتراضية مع التحقق من وجودها
         request_count = user_data.get('request_count', 0)
         current_time = time.time()
         reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
         
-        # التحقق من وجود reset_time وإلا استخدام قيمة افتراضية
         reset_time = user_data.get('reset_time')
         if reset_time is None:
             reset_time = current_time + (reset_hours * 3600)
             limiter.db.update_user(user_id, {'reset_time': reset_time})
 
-        # حساب الوقت المتبقي بشكل آمن
         try:
             time_left = max(0, float(reset_time) - current_time)
             hours_left = max(0, int(time_left // 3600))
@@ -79,10 +79,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(error_msg)
             
-            # إعادة تعيين بيانات المستخدم
             user_id = update.effective_user.id
             limiter.reset_user(user_id)
-            await start(update, context)  # إعادة المحاولة
+            await start(update, context)
         except Exception as e:
             logger.error(f"Error in error handling: {str(e)}")
 
@@ -115,9 +114,47 @@ async def show_normal_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         )
         
+        # تعيين حالة المستخدم لاستقبال النص
+        context.user_data['state'] = NORMAL_TEXT_INPUT
+        
     except Exception as e:
         logger.error(f"Error in normal usage guide: {str(e)}")
         await update.callback_query.edit_message_text("⚠️ حدث خطأ في عرض الإرشادات")
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        user_id = update.effective_user.id
+        user_text = update.message.text
+        
+        # التحقق من الحد الأقصى للأحرف
+        char_limit = Config.PREMIUM_CHAR_LIMIT if limiter.is_premium_user(user_id) else Config.CHAR_LIMIT
+        if len(user_text) > char_limit:
+            await update.message.reply_text(f"⚠️ النص يتجاوز الحد المسموح ({char_limit} حرفاً)")
+            return
+        
+        # التحقق من عدد الطلبات المتبقية
+        if not limiter.can_make_request(user_id):
+            await update.message.reply_text("⚠️ لقد استنفذت عدد الطلبات اليومية. يرجى المحاولة لاحقاً.")
+            return
+        
+        # إرسال أزرار الخيارات
+        keyboard = [
+            [InlineKeyboardButton("🛠 تصحيح الأخطاء النحوية", callback_data=f"correct_{user_id}")],
+            [InlineKeyboardButton("🔄 إعادة صياغة النص", callback_data=f"paraphrase_{user_id}")],
+            [InlineKeyboardButton("🏠 العودة للرئيسية", callback_data="back_to_start")]
+        ]
+        
+        await update.message.reply_text(
+            "📝 اختر الخدمة المطلوبة:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        # حفظ النص مؤقتاً لمعالجته لاحقاً
+        context.user_data['last_text'] = user_text
+        
+    except Exception as e:
+        logger.error(f"Error handling text input: {str(e)}")
+        await update.message.reply_text("⚠️ حدث خطأ أثناء معالجة النص")
 
 async def show_api_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -164,3 +201,4 @@ def setup_start_handlers(application):
     application.add_handler(CallbackQueryHandler(show_normal_usage, pattern='^normal_usage$'))
     application.add_handler(CallbackQueryHandler(show_api_usage, pattern='^api_usage$'))
     application.add_handler(CallbackQueryHandler(back_to_start, pattern='^back_to_start$'))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
