@@ -246,10 +246,11 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             f"⚙️ إعدادات البوت:\n\n"
             f"🔧 وضع الصيانة: {'✅ مفعل' if settings.get('maintenance_mode') else '❌ معطل'}\n"
-            f"📝 حد النص العادي: {settings.get('normal_text_limit', 500)} حرف\n"
-            f"📝 حد النص المميز: {settings.get('premium_text_limit', 2000)} حرف\n"
+            f"📝 حد النص العادي: {settings.get('normal_text_limit', 120)} حرف\n"
+            f"📝 حد النص المميز: {settings.get('premium_text_limit', 500)} حرف\n"
             f"🔢 عدد الطلبات اليومية: {settings.get('daily_limit', 10)}\n"
-            f"⏰ وقت تجديد العدادات: {settings.get('renew_time', '00:00')}"
+            f"🔢 عدد طلبات المميز: {settings.get('premium_daily_limit', 50)}\n"
+            f"⏰ وقت تجديد العدادات: كل 24 ساعة"
         )
 
         keyboard = [
