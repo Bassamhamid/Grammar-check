@@ -17,15 +17,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user_id = update.effective_user.id
         
-        # الحصول على بيانات المستخدم
-        allowed, time_left = limiter.check_limits(user_id)
+        # الحصول على بيانات المستخدم بشكل آمن
         user_data = limiter.db.get_user(user_id) or {}
+        request_count = user_data.get('request_count', 0)
+        reset_time = user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
         
-        # حساب الوقت المتبقي بشكل صحيح
-        hours_left = max(0, int(time_left // 3600)) if time_left else 0
-        remaining_uses = Config.REQUEST_LIMIT - user_data.get('request_count', 0)
+        # حساب الوقت المتبقي والطلبات المتبقية
+        current_time = time.time()
+        time_left = max(0, reset_time - current_time)
+        hours_left = max(0, int(time_left // 3600))
+        remaining_uses = max(0, Config.REQUEST_LIMIT - request_count)
         
-        # رسالة الترحيب المعدلة مع تحسينات بصرية
+        # رسالة الترحيب المعدلة
         welcome_msg = f"""
 <b>✨ مرحباً بك في بوت التصحيح النحوي ✨</b>
 
