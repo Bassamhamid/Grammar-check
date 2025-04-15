@@ -1,11 +1,9 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from config import Config
+from firebase_db import FirebaseDB
 import logging
-import csv
-from io import StringIO
 from datetime import datetime
-from firebase_admin import db
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +12,8 @@ MAINTENANCE_MODE = False
 
 def is_admin(user_id):
     return user_id in Config.ADMIN_IDS
+
+db_instance = FirebaseDB()
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -24,12 +24,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📊 إحصائيات حقيقية", callback_data="real_stats")],
             [InlineKeyboardButton("📢 إرسال إشعار فعلي", callback_data="real_broadcast")],
-            [InlineKeyboardButton("👥 إدارة مستخدمين حقيقية", callback_data="real_users")],
             [InlineKeyboardButton("🔧 إعدادات فعلية", callback_data="real_settings")]
         ]
-        
+
         await update.message.reply_text(
-            "🛠️ لوحة تحكم المشرفين - النسخة المعدلة:",
+            "🛠️ لوحة تحكم المشرفين:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -39,48 +38,50 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     try:
-        # جلب بيانات حقيقية من Firebase
-        users_ref = db.reference('users')
-        stats_ref = db.reference('stats')
-        
-        users = users_ref.get() or {}
-        stats = stats_ref.get() or {}
-        
-        total_users = len(users)
-        active_today = len([u for u in users.values() if u.get('last_active') == str(datetime.now().date())])
+        users_data = db_instance.users_ref.get() or {}
+        stats = db_instance.get_stats()
+
+        total_users = len(users_data)
+        active_today = len([
+            u for u in users_data.values()
+            if u.get('last_active') == str(datetime.now().date())
+        ])
         total_requests = stats.get('total_requests', 0)
-        api_users = len([u for u in users.values() if u.get('is_premium', False)])
-        banned_users = len([u for u in users.values() if u.get('is_banned', False)])
-        
+        api_users = len([u for u in users_data.values() if u.get('is_premium')])
+        banned_users = len([u for u in users_data.values() if u.get('is_banned')])
+
         stats_text = (
-            "📊 الإحصائيات الفعلية:\n\n"
+            "📊 الإحصائيات:\n\n"
             f"👥 إجمالي المستخدمين: {total_users}\n"
             f"🟢 نشطين اليوم: {active_today}\n"
             f"📨 إجمالي الطلبات: {total_requests}\n"
             f"⭐ مستخدمين API: {api_users}\n"
             f"⛔ محظورين: {banned_users}"
         )
-        
-        await query.edit_message_text(
-            stats_text,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 تحديث حقيقي", callback_data="real_stats")],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_real_admin")]
-            ])
-        )
-        
+
+        if query.message.text != stats_text:
+            await query.edit_message_text(
+                stats_text,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 تحديث", callback_data="real_stats")],
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_real_admin")]
+                ])
+            )
+        else:
+            await query.answer("الإحصائية محدثة بالفعل.")
+
     except Exception as e:
         logger.error(f"Error in real stats: {str(e)}")
-        await query.edit_message_text("⚠️ حدث خطأ في جلب البيانات")
+        await query.edit_message_text("⚠️ حدث خطأ أثناء جلب الإحصائيات.")
 
 async def handle_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     await query.edit_message_text(
-        "📢 أرسل الرسالة للإشعار الفعلي:",
+        "📢 أرسل نص الرسالة للإشعار:",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("إلغاء", callback_data="back_to_real_admin")]
         ])
@@ -88,35 +89,34 @@ async def handle_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['awaiting_real_broadcast'] = True
 
 async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if 'awaiting_real_broadcast' in context.user_data:
+    if context.user_data.get('awaiting_real_broadcast'):
         message = update.message.text
-        
+
         try:
-            users_ref = db.reference('users')
-            users = users_ref.get() or {}
-            
+            users_data = db_instance.users_ref.get() or {}
             sent_count = 0
-            for user_id, user_data in users.items():
+
+            for user_id, user_data in users_data.items():
                 try:
-                    if user_data.get('is_banned', False):
+                    if user_data.get('is_banned'):
                         continue
-                        
-                    # هنا كود إرسال الرسالة الفعلي لكل مستخدم
+
+                    # إرسال الرسالة (فعّل هذا السطر وقت النشر)
                     # await context.bot.send_message(chat_id=user_id, text=message)
                     sent_count += 1
-                    
+
                     if sent_count >= Config.MAX_BROADCAST_USERS:
                         break
-                        
+
                 except Exception as e:
                     logger.error(f"Error sending to {user_id}: {str(e)}")
-            
-            await update.message.reply_text(f"✅ تم إرسال الإشعار لـ {sent_count} مستخدم")
-            
+
+            await update.message.reply_text(f"✅ تم إرسال الإشعار إلى {sent_count} مستخدم")
+
         except Exception as e:
             logger.error(f"Broadcast error: {str(e)}")
-            await update.message.reply_text("⚠️ فشل في إرسال الإشعار")
-        
+            await update.message.reply_text("⚠️ فشل في إرسال الإشعار.")
+
         finally:
             del context.user_data['awaiting_real_broadcast']
             await admin_panel(update, context)
