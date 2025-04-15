@@ -5,7 +5,7 @@ from telegram.ext import (
 )
 from config import Config
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 from firebase_db import FirebaseDB
 
@@ -47,27 +47,30 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     try:
-        # تحديث الإحصاءات أولاً
-        firebase_db.update_stats()
+        # تحديث الإحصاءات فقط إذا مر أكثر من 10 ثواني منذ آخر تحديث
+        last_update = context.user_data.get('last_stats_update', 0)
+        if time.time() - last_update > 10:
+            firebase_db.update_stats()
+            context.user_data['last_stats_update'] = time.time()
         
-        # جلب البيانات المحدثة
         users = firebase_db.get_all_users()
         stats = firebase_db.get_stats()
 
         total_users = len(users)
         active_today = sum(1 for u in users.values() 
-                        if u.get('last_active', '').startswith(datetime.now().date().isoformat()))
+                         if u.get('last_active', '').startswith(datetime.now().date().isoformat()))
         premium_users = sum(1 for u in users.values() if u.get('is_premium'))
         banned_users = sum(1 for u in users.values() if u.get('is_banned'))
 
         stats_text = (
-            f"📊 الإحصائيات الحية (آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M')}):\n\n"
+            f"📊 الإحصائيات الحية (آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}):\n\n"
             f"👥 إجمالي المستخدمين: {total_users}\n"
             f"🟢 نشطين اليوم: {active_today}\n"
             f"⭐ مستخدمين مميزين: {premium_users}\n"
             f"⛔ مستخدمين محظورين: {banned_users}\n"
             f"📨 طلبات اليوم: {stats.get('daily_requests', 0)}\n"
-            f"📈 إجمالي الطلبات: {stats.get('total_requests', 0)}"
+            f"📈 إجمالي الطلبات: {stats.get('total_requests', 0)}\n"
+            f"🆔: {int(time.time())}"  # إضافة معرف فريد لمنع خطأ الرسالة المتكررة
         )
 
         keyboard = [
@@ -75,9 +78,14 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
         ]
 
-        await query.edit_message_text(
-            text=stats_text,
-            reply_markup=InlineKeyboardMarkup(keyboard))
+        try:
+            await query.edit_message_text(
+                text=stats_text,
+                reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Error editing stats message: {str(e)}")
+                await query.edit_message_text("⚠️ حدث خطأ في تحديث الإحصاءات")
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ خطأ في جلب الإحصائيات")
@@ -139,7 +147,6 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for user_id, user_data in users.items():
         try:
-            # تخطي المستخدمين المحظورين أو الذين لم يبدأوا محادثة
             if user_data.get('is_banned') or not user_data.get('started_chat', True):
                 blocked += 1
                 continue
@@ -149,13 +156,12 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=f"📢 إشعار عام من الإدارة:\n\n{message}"
             )
             success += 1
-            time.sleep(0.3)  # تقليل الضغط على السيرفر
+            time.sleep(Config.BROADCAST_DELAY)
         except Exception as e:
             failed += 1
-            logger.error(f"Failed to send to {user_id}: {str(e)}")
-            # تحديث حالة المستخدم إذا كان قد حظر البوت
             if "chat not found" in str(e).lower():
                 firebase_db.update_user(int(user_id), {'started_chat': False})
+            logger.error(f"Failed to send to {user_id}: {str(e)}")
 
     await query.edit_message_text(
         f"✅ تم إرسال الإشعار بنجاح!\n\n"
@@ -194,17 +200,15 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_data = None
     user_id = None
     
-    # البحث بالمعرف إذا كان رقماً
     if search_term.isdigit():
         user_id = int(search_term)
         user_data = firebase_db.get_user(user_id)
     else:
-        # البحث باليوزرنيم
-        search_term = search_term.replace('@', '')
+        search_term = search_term.replace('@', '').lower()
         user_data = firebase_db.get_user_by_username(search_term)
         if user_data:
             user_id = next((uid for uid, data in firebase_db.get_all_users().items() 
-                          if data.get('username') == search_term), None)
+                          if data.get('username', '').lower() == search_term), None)
 
     if not user_data or not user_id:
         await update.message.reply_text("❌ لم يتم العثور على المستخدم.")
@@ -303,42 +307,41 @@ async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['admin_action'] = 'edit_limits'
+    context.user_data['limit_type'] = query.data
     
     current_settings = firebase_db.get_settings()
-    
-    keyboard = [
-        [InlineKeyboardButton(f"حد النص العادي ({current_settings.get('normal_text_limit', Config.CHAR_LIMIT)})", 
-                            callback_data="admin_edit_normal_limit")],
-        [InlineKeyboardButton(f"حد النص المميز ({current_settings.get('premium_text_limit', Config.PREMIUM_CHAR_LIMIT)})", 
-                            callback_data="admin_edit_premium_limit")],
-        [InlineKeyboardButton(f"الطلبات اليومية ({current_settings.get('daily_limit', Config.REQUEST_LIMIT)})", 
-                            callback_data="admin_edit_daily_limit")],
-        [InlineKeyboardButton(f"طلبات المميزين ({current_settings.get('premium_daily_limit', Config.PREMIUM_REQUEST_LIMIT)})", 
-                            callback_data="admin_edit_premium_daily_limit")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_settings")]
-    ]
+    current_value = {
+        'admin_edit_normal_limit': current_settings.get('normal_text_limit', Config.CHAR_LIMIT),
+        'admin_edit_premium_limit': current_settings.get('premium_text_limit', Config.PREMIUM_CHAR_LIMIT),
+        'admin_edit_daily_limit': current_settings.get('daily_limit', Config.REQUEST_LIMIT),
+        'admin_edit_premium_daily_limit': current_settings.get('premium_daily_limit', Config.PREMIUM_REQUEST_LIMIT)
+    }.get(query.data, 0)
     
     await query.edit_message_text(
-        "⚙️ اختر الحد الذي تريد تعديله:",
-        reply_markup=InlineKeyboardMarkup(keyboard))
+        f"✏️ الرجاء إرسال القيمة الجديدة (الحالية: {current_value}):")
 
 async def save_new_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         new_value = int(update.message.text)
         limit_type = context.user_data.get('limit_type')
         
-        updates = {}
-        if limit_type == 'admin_edit_normal_limit':
-            updates['normal_text_limit'] = new_value
-        elif limit_type == 'admin_edit_premium_limit':
-            updates['premium_text_limit'] = new_value
-        elif limit_type == 'admin_edit_daily_limit':
-            updates['daily_limit'] = new_value
-        elif limit_type == 'admin_edit_premium_daily_limit':
-            updates['premium_daily_limit'] = new_value
-            
-        firebase_db.update_settings(updates)
-        await update.message.reply_text("✅ تم تحديث الحد بنجاح!")
+        if not limit_type:
+            await update.message.reply_text("⚠️ انتهت الجلسة، يرجى المحاولة مرة أخرى")
+            return await admin_panel(update, context)
+        
+        updates = {
+            'admin_edit_normal_limit': {'normal_text_limit': new_value},
+            'admin_edit_premium_limit': {'premium_text_limit': new_value},
+            'admin_edit_daily_limit': {'daily_limit': new_value},
+            'admin_edit_premium_daily_limit': {'premium_daily_limit': new_value}
+        }.get(limit_type, {})
+        
+        if updates:
+            firebase_db.update_settings(updates)
+            await update.message.reply_text("✅ تم تحديث الحد بنجاح!")
+        else:
+            await update.message.reply_text("⚠️ نوع الحد غير معروف")
+        
         return await settings(update, context)
     except ValueError:
         await update.message.reply_text("⚠️ يجب إدخال رقم صحيح")
@@ -354,7 +357,6 @@ async def handle_normal_message(update: Update, context: ContextTypes.DEFAULT_TY
 def setup_admin_handlers(application):
     admin_filter = filters.ChatType.PRIVATE & filters.User(username=Config.ADMIN_USERNAMES)
     
-    # تسجيل المعالجات
     application.add_handler(CommandHandler("admin", admin_panel, filters=admin_filter))
     application.add_handler(CallbackQueryHandler(show_stats, pattern="^admin_stats$"))
     application.add_handler(CallbackQueryHandler(broadcast, pattern="^admin_broadcast$"))
@@ -370,9 +372,6 @@ def setup_admin_handlers(application):
     application.add_handler(CallbackQueryHandler(settings, pattern="^admin_settings$"))
     application.add_handler(CallbackQueryHandler(toggle_maintenance, pattern="^admin_toggle_maintenance$"))
     application.add_handler(CallbackQueryHandler(edit_limits, pattern="^admin_edit_limits$"))
-    application.add_handler(CallbackQueryHandler(
-        lambda u, c: (u, c.__setitem__('limit_type', u.callback_query.data)) or edit_limits(u, c),
-        pattern="^admin_edit_.*_limit$"))
     application.add_handler(MessageHandler(
         admin_filter & filters.TEXT & ~filters.COMMAND,
         handle_admin_message
