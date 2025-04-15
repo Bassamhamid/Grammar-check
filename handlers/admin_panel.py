@@ -1,16 +1,14 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    CommandHandler, CallbackQueryHandler, MessageHandler, 
+    CommandHandler, CallbackQueryHandler, MessageHandler,
     ContextTypes, filters
 )
 from config import Config
 import logging
 from datetime import datetime
-from firebase_admin import db
-from utils.limits import limiter
-from firebase_db import FirebaseDB
 import time
 import random
+from firebase_db import FirebaseDB
 
 logger = logging.getLogger(__name__)
 firebase_db = FirebaseDB()
@@ -41,11 +39,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ لوحة تحكم المشرفين:\n\nاختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
-        message = update.message or update.callback_query.message
-        await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
+        if update.message or update.callback_query:
+            message = update.message or update.callback_query.message
+            await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -69,10 +67,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_data.get('is_banned'):
                 banned_users += 1
 
-        # إضافة رقم عشوائي لمنع خطأ "Message not modified"
-        random_suffix = random.randint(1, 1000)
         stats_text = (
-            f"📊 الإحصائيات الحية (التحديث: {random_suffix}):\n\n"
+            f"📊 الإحصائيات الحية (التحديث: {random.randint(1, 1000)}):\n\n"
             f"👥 إجمالي المستخدمين: {total_users}\n"
             f"🟢 نشطين اليوم: {active_today}\n"
             f"⭐ مستخدمين مميزين: {premium_users}\n"
@@ -88,8 +84,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             text=stats_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-            
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ خطأ في جلب الإحصائيات")
@@ -97,23 +92,19 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    # تفعيل وضع البث
     context.user_data['broadcast_mode'] = True
     
     keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]]
     await query.edit_message_text(
         "📝 اكتب الرسالة التي تريد إرسالها لجميع المستخدمين:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # التحقق من أن المرسل مشرف
     if not is_admin(update.effective_user.username):
         return
         
     if not context.user_data.get('broadcast_mode'):
-        return await handle_normal_message(update, context)
+        return
 
     context.user_data['broadcast_message'] = update.message.text
     context.user_data['broadcast_mode'] = False
@@ -125,8 +116,7 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
     
     await update.message.reply_text(
         f"📨 هذه هي الرسالة:\n\n{update.message.text}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -151,7 +141,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=f"📢 إشعار عام:\n\n{message}"
                 )
                 success_count += 1
-                time.sleep(0.1)  # تجنب حظر الرسائل السريعة
+                time.sleep(0.1)
         except Exception as e:
             logger.error(f"Failed to send to {user_id}: {str(e)}")
             failed_count += 1
@@ -159,8 +149,7 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"✅ تم إرسال الإشعار بنجاح!\n\n"
         f"📤 وصل إلى: {success_count} مستخدم\n"
-        f"❌ فشل الإرسال لـ: {failed_count} مستخدم"
-    )
+        f"❌ فشل الإرسال لـ: {failed_count} مستخدم")
 
 async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -174,37 +163,30 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(
         "👥 إدارة المستخدمين:\n\nاختر العملية المطلوبة:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    # تفعيل وضع البحث
     context.user_data['search_mode'] = True
     
     keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="manage_users")]]
     await query.edit_message_text(
         "🔍 أدخل اسم المستخدم أو الـ ID للبحث:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # التحقق من أن المرسل مشرف
     if not is_admin(update.effective_user.username):
         return
         
     if not context.user_data.get('search_mode'):
-        return await handle_normal_message(update, context)
+        return
 
     search_term = update.message.text.strip()
     context.user_data['search_mode'] = False
 
-    # البحث أولاً بالاسم
     user_data = firebase_db.get_user_by_username(search_term)
     
-    # إذا لم يتم العثور بالاسم، جرب البحث بالـ ID
     if not user_data and search_term.isdigit():
         user_data = firebase_db.get_user(int(search_term))
 
@@ -238,8 +220,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text(
         text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -290,8 +271,7 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-            
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error in settings: {str(e)}")
         await query.edit_message_text("⚠️ حدث خطأ في تحميل الإعدادات")
@@ -306,42 +286,38 @@ async def toggle_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE)
         firebase_db.update_settings({'maintenance_mode': new_mode})
         
         await query.edit_message_text(
-            f"✅ تم {'تفعيل' if new_mode else 'تعطيل'} وضع الصيانة بنجاح."
-        )
+            f"✅ تم {'تفعيل' if new_mode else 'تعطيل'} وضع الصيانة بنجاح.")
     except Exception as e:
         logger.error(f"Error in toggle_maintenance: {str(e)}")
         await query.edit_message_text("⚠️ حدث خطأ أثناء تغيير وضع الصيانة")
 
 async def handle_normal_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة الرسائل العادية للمشرفين"""
-    if update.message and is_admin(update.effective_user.username):
+    if is_admin(update.effective_user.username):
         await update.message.reply_text("ℹ️ اختر أحد الخيارات من لوحة التحكم")
 
 def setup_admin_handlers(application):
-    # فلتر المشرفين فقط
     admin_filter = filters.ChatType.PRIVATE & filters.User(username=Config.ADMIN_USERNAMES)
     
     application.add_handler(CommandHandler("admin", admin_panel, filters=admin_filter))
     application.add_handler(CallbackQueryHandler(show_stats, pattern="^real_stats$"))
     application.add_handler(CallbackQueryHandler(broadcast, pattern="^broadcast$"))
     application.add_handler(MessageHandler(
-        admin_filter & filters.TEXT & ~filters.COMMAND, 
+        admin_filter & filters.TEXT & ~filters.COMMAND,
         handle_broadcast_message
     ))
     application.add_handler(CallbackQueryHandler(confirm_broadcast, pattern="^confirm_broadcast$"))
     application.add_handler(CallbackQueryHandler(manage_users, pattern="^manage_users$"))
     application.add_handler(CallbackQueryHandler(search_user, pattern="^search_user$"))
     application.add_handler(MessageHandler(
-        admin_filter & filters.TEXT & ~filters.COMMAND, 
+        admin_filter & filters.TEXT & ~filters.COMMAND,
         handle_search_input
     ))
     application.add_handler(CallbackQueryHandler(manage_user_action, pattern="^ban_|^unban_|^premium_|^unpremium_"))
     application.add_handler(CallbackQueryHandler(settings, pattern="^settings$"))
     application.add_handler(CallbackQueryHandler(toggle_maintenance, pattern="^toggle_maintenance$"))
     application.add_handler(CallbackQueryHandler(admin_panel, pattern="^back_to_admin$"))
-    
-    # معالجة الرسائل العادية للمشرفين
     application.add_handler(MessageHandler(
-        admin_filter & filters.TEXT & ~filters.COMMAND, 
+        admin_filter & filters.TEXT & ~filters.COMMAND,
         handle_normal_message
     ))
