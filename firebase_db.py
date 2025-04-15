@@ -12,9 +12,14 @@ def initialize_firebase():
     global _firebase_app
     try:
         if not firebase_admin._apps:
+            if not Config.FIREBASE_SERVICE_ACCOUNT:
+                raise ValueError("FIREBASE_SERVICE_ACCOUNT not configured")
+            if not Config.FIREBASE_DATABASE_URL:
+                raise ValueError("FIREBASE_DATABASE_URL not configured")
+
             cred = credentials.Certificate(Config.FIREBASE_SERVICE_ACCOUNT)
             _firebase_app = firebase_admin.initialize_app(cred, {
-                'databaseURL': Config.FIREBASE_DB_URL
+                'databaseURL': Config.FIREBASE_DATABASE_URL  # التعديل هنا
             })
             logging.info("✅ تم تهيئة Firebase بنجاح")
     except Exception as e:
@@ -110,9 +115,10 @@ class FirebaseDB:
         """استرجاع إعدادات البوت"""
         default_settings = {
             'maintenance_mode': False,
-            'normal_text_limit': 500,
-            'premium_text_limit': 2000,
-            'daily_limit': 10,
+            'normal_text_limit': Config.CHAR_LIMIT,
+            'premium_text_limit': Config.PREMIUM_CHAR_LIMIT,
+            'daily_limit': Config.REQUEST_LIMIT,
+            'premium_daily_limit': Config.PREMIUM_REQUEST_LIMIT,
             'renew_time': '00:00'
         }
         try:
