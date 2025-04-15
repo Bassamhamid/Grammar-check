@@ -52,8 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         keyboard = [
             [InlineKeyboardButton("📝 الطريقة العادية (بدون API)", callback_data="normal_usage")],
-            [InlineKeyboardButton("🔑 استخدام API شخصي", callback_data="api_usage")],
-            [InlineKeyboardButton("⚙️ إعدادات الحساب", callback_data="account_settings")]
+            [InlineKeyboardButton("🔑 استخدام API شخصي", callback_data="api_usage")]
         ]
         
         if update.callback_query:
@@ -112,8 +111,7 @@ async def show_normal_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             usage_guide,
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏠 العودة للرئيسية", callback_data="back_to_start")],
-                [InlineKeyboardButton("🚀 تجربة الآن", switch_inline_query_current_chat="")]
+                [InlineKeyboardButton("🏠 العودة للرئيسية", callback_data="back_to_start")]
             ])
         )
         
@@ -150,8 +148,7 @@ async def show_api_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             disable_web_page_preview=True,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔗 الذهاب لموقع OpenRouter", url="https://openrouter.ai")],
-                [InlineKeyboardButton("🏠 العودة للرئيسية", callback_data="back_to_start")],
-                [InlineKeyboardButton("⚙️ إعداد API", callback_data="api_settings")]
+                [InlineKeyboardButton("🏠 العودة للرئيسية", callback_data="back_to_start")]
             ])
         )
         
