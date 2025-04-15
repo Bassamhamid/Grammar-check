@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from config import Config
 import logging
 from datetime import datetime
@@ -59,7 +59,8 @@ async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         today = datetime.now().date().isoformat()
         for user_id, user_data in users.items():
-            if user_data.get('last_active', '') == today:
+            last_active = user_data.get('last_active', '')
+            if isinstance(last_active, str) and last_active.startswith(today):
                 active_today += 1
             if user_data.get('is_premium', False):
                 premium_users += 1
@@ -81,26 +82,87 @@ async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔄 آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # إنشاء لوحة المفاتيح
         keyboard = [
             [InlineKeyboardButton("🔄 تحديث", callback_data="real_stats")],
             [InlineKeyboardButton("📤 تصدير البيانات", callback_data="export_data")],
             [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
         ]
 
-        # محاولة التعديل فقط إذا كانت البيانات مختلفة
-        try:
-            await query.edit_message_text(
-                stats_text,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        except Exception as e:
-            if "Message is not modified" not in str(e):
-                raise
+        await query.edit_message_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     except Exception as e:
         logger.error(f"Error in real stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإحصائيات")
+
+async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        # جلب بيانات المستخدمين من Firebase بدون ترتيب
+        users_ref = db.reference('users')
+        users = users_ref.limit_to_last(10).get() or {}
+
+        users_list = []
+        for user_id, user_data in users.items():
+            users_list.append(
+                f"👤 {user_data.get('username', 'مجهول')} (ID: {user_id}) - "
+                f"{'⭐' if user_data.get('is_premium', False) else '🔹'}"
+                f"{'⛔' if user_data.get('is_banned', False) else ''}"
+            )
+
+        users_text = "👥 آخر 10 مستخدمين:\n\n" + "\n".join(users_list) if users_list else "⚠️ لا يوجد مستخدمين مسجلين"
+
+        keyboard = [
+            [InlineKeyboardButton("🔄 تحديث", callback_data="real_users")],
+            [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+        ]
+
+        await query.edit_message_text(
+            users_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+            
+    except Exception as e:
+        logger.error(f"Error in users management: {str(e)}", exc_info=True)
+        await query.edit_message_text("⚠️ حدث خطأ في جلب بيانات المستخدمين")
+
+async def handle_real_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        stats = limiter.db.get_stats()
+        settings_text = (
+            "⚙️ إعدادات البوت:\n\n"
+            f"🔧 وضع الصيانة: {'✅ مفعل' if MAINTENANCE_MODE else '❌ معطل'}\n"
+            f"📝 حد النص العادي: {Config.CHAR_LIMIT} حرف\n"
+            f"💎 حد النص المميز: {Config.PREMIUM_CHAR_LIMIT} حرف\n"
+            f"📨 طلبات اليوم: {stats.get('daily_requests', 0)}\n"
+            f"🔄 وقت التجديد: كل {Config.RESET_HOURS} ساعة"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton("🔧 تبديل الصيانة", callback_data="toggle_maintenance"),
+                InlineKeyboardButton("🔄 تحديث", callback_data="real_settings")
+            ],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+        ]
+
+        await query.edit_message_text(
+            settings_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    except Exception as e:
+        logger.error(f"Error in settings: {str(e)}", exc_info=True)
+        await query.edit_message_text("⚠️ حدث خطأ في جلب الإعدادات")
+
+# باقي الدوال (handle_real_broadcast, send_real_broadcast, handle_refresh_all) تبقى كما هي
 
 async def handle_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
