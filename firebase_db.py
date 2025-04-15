@@ -3,9 +3,9 @@ from firebase_admin import credentials, db
 from config import Config
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-# تهيئة Firebase
+# Initialize Firebase
 _firebase_app = None
 
 def initialize_firebase():
@@ -19,11 +19,11 @@ def initialize_firebase():
 
             cred = credentials.Certificate(Config.FIREBASE_SERVICE_ACCOUNT)
             _firebase_app = firebase_admin.initialize_app(cred, {
-                'databaseURL': Config.FIREBASE_DATABASE_URL  # التعديل هنا
+                'databaseURL': Config.FIREBASE_DATABASE_URL
             })
-            logging.info("✅ تم تهيئة Firebase بنجاح")
+            logging.info("✅ Firebase initialized successfully")
     except Exception as e:
-        logging.error(f"🔥 فشل تهيئة Firebase: {str(e)}")
+        logging.error(f"🔥 Failed to initialize Firebase: {str(e)}")
         raise
 
 class FirebaseDB:
@@ -34,151 +34,112 @@ class FirebaseDB:
         self.settings_ref = db.reference('/settings')
 
     def get_user(self, user_id: int) -> dict:
-        """استرجاع بيانات المستخدم من Firebase باستخدام ID"""
-        current_time = time.time()
+        """Get user data by ID"""
         default_data = {
             'request_count': 0,
             'last_request': None,
-            'reset_time': current_time + (Config.RESET_HOURS * 3600),
+            'reset_time': time.time() + (Config.RESET_HOURS * 3600),
             'is_premium': False,
             'is_banned': False,
             'last_active': None,
-            'timestamp': current_time,
+            'timestamp': time.time(),
             'username': None
         }
         try:
             snapshot = self.users_ref.child(str(user_id)).get()
-            if snapshot:
-                return {**default_data, **snapshot}
-            return default_data
+            return {**default_data, **snapshot} if snapshot else default_data
         except Exception as e:
-            logging.error(f"🚨 خطأ في get_user: {str(e)}")
+            logging.error(f"🚨 Error in get_user: {str(e)}")
             return default_data
 
     def get_user_by_username(self, username: str) -> Optional[dict]:
-        """استرجاع بيانات المستخدم باستخدام اسم المستخدم"""
+        """Get user data by username"""
         try:
-            all_users = self.users_ref.get() or {}
-            for user_id, user_data in all_users.items():
-                if user_data.get('username') == username:
-                    return user_data
-            return None
+            all_users = self.get_all_users()
+            return next((u for u in all_users.values() if u.get('username') == username), None)
         except Exception as e:
-            logging.error(f"🚨 خطأ في get_user_by_username: {str(e)}")
+            logging.error(f"🚨 Error in get_user_by_username: {str(e)}")
             return None
 
     def update_user(self, user_id: int, data: dict):
-        """تحديث بيانات المستخدم في Firebase"""
+        """Update user data"""
         try:
             data['timestamp'] = time.time()
             self.users_ref.child(str(user_id)).update(data)
         except Exception as e:
-            logging.error(f"🚨 خطأ في update_user: {str(e)}")
-            raise
-
-    def update_user_by_username(self, username: str, updates: dict):
-        """تحديث بيانات المستخدم باستخدام اسم المستخدم"""
-        try:
-            all_users = self.users_ref.get() or {}
-            for user_id, user_data in all_users.items():
-                if user_data.get('username') == username:
-                    updates['timestamp'] = time.time()
-                    self.users_ref.child(user_id).update(updates)
-                    return True
-            return False
-        except Exception as e:
-            logging.error(f"🚨 خطأ في update_user_by_username: {str(e)}")
+            logging.error(f"🚨 Error in update_user: {str(e)}")
             raise
 
     def get_stats(self) -> dict:
-        """استرجاع إحصائيات البوت"""
+        """Get bot statistics"""
         try:
             snapshot = self.stats_ref.get()
-            return snapshot if snapshot else {
+            return snapshot or {
                 'total_requests': 0,
                 'daily_requests': 0,
                 'last_reset': time.time()
             }
         except Exception as e:
-            logging.error(f"🚨 خطأ في get_stats: {str(e)}")
+            logging.error(f"🚨 Error in get_stats: {str(e)}")
             return {'total_requests': 0, 'daily_requests': 0}
 
     def update_stats(self, data: dict):
-        """تحديث إحصائيات البوت"""
+        """Update bot statistics"""
         try:
             self.stats_ref.update(data)
         except Exception as e:
-            logging.error(f"🚨 خطأ في update_stats: {str(e)}")
+            logging.error(f"🚨 Error in update_stats: {str(e)}")
             raise
 
     def get_settings(self) -> dict:
-        """استرجاع إعدادات البوت"""
+        """Get bot settings"""
         default_settings = {
             'maintenance_mode': False,
             'normal_text_limit': Config.CHAR_LIMIT,
             'premium_text_limit': Config.PREMIUM_CHAR_LIMIT,
             'daily_limit': Config.REQUEST_LIMIT,
-            'premium_daily_limit': Config.PREMIUM_REQUEST_LIMIT,
-            'renew_time': '00:00'
+            'premium_daily_limit': Config.PREMIUM_REQUEST_LIMIT
         }
         try:
             snapshot = self.settings_ref.get()
             return {**default_settings, **snapshot} if snapshot else default_settings
         except Exception as e:
-            logging.error(f"🚨 خطأ في get_settings: {str(e)}")
+            logging.error(f"🚨 Error in get_settings: {str(e)}")
             return default_settings
 
-    def update_settings(self, new_settings: dict):
-        """تحديث إعدادات البوت"""
+    def update_settings(self, settings: dict) -> bool:
+        """Update bot settings"""
         try:
-            self.settings_ref.update(new_settings)
+            self.settings_ref.update(settings)
             return True
         except Exception as e:
-            logging.error(f"🚨 خطأ في update_settings: {str(e)}")
+            logging.error(f"🚨 Error in update_settings: {str(e)}")
             return False
 
-    def get_recent_users(self, limit: int = 10) -> Dict[str, dict]:
-        """استرجاع أحدث المستخدمين"""
-        try:
-            all_users = self.users_ref.get() or {}
-            sorted_users = sorted(
-                all_users.items(),
-                key=lambda x: x[1].get('timestamp', 0),
-                reverse=True
-            )
-            return dict(sorted_users[:limit])
-        except Exception as e:
-            logging.error(f"🚨 خطأ في get_recent_users: {str(e)}")
-            return {}
-
     def get_all_users(self) -> Dict[str, dict]:
-        """استرجاع جميع المستخدمين"""
+        """Get all users"""
         try:
             return self.users_ref.get() or {}
         except Exception as e:
-            logging.error(f"🚨 خطأ في get_all_users: {str(e)}")
+            logging.error(f"🚨 Error in get_all_users: {str(e)}")
             return {}
 
     def ban_user(self, user_id: int) -> bool:
-        """حظر مستخدم"""
-        try:
-            self.users_ref.child(str(user_id)).update({
-                'is_banned': True,
-                'timestamp': time.time()
-            })
-            return True
-        except Exception as e:
-            logging.error(f"🚨 خطأ في ban_user: {str(e)}")
-            return False
+        """Ban a user"""
+        return self._update_user_status(user_id, True)
 
     def unban_user(self, user_id: int) -> bool:
-        """رفع الحظر عن مستخدم"""
+        """Unban a user"""
+        return self._update_user_status(user_id, False)
+
+    def _update_user_status(self, user_id: int, is_banned: bool) -> bool:
+        """Internal method to update user ban status"""
         try:
             self.users_ref.child(str(user_id)).update({
-                'is_banned': False,
+                'is_banned': is_banned,
                 'timestamp': time.time()
             })
             return True
         except Exception as e:
-            logging.error(f"🚨 خطأ في unban_user: {str(e)}")
+            logging.error(f"🚨 Error in _update_user_status: {str(e)}")
             return False
