@@ -38,33 +38,44 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def initialize_system():
     """تهيئة جميع أنظمة البوت"""
     try:
+        # قائمة بالمتغيرات المطلوبة ووصفها
+        required_configs = {
+            'BOT_TOKEN': 'توكن بوت التليجرام',
+            'FIREBASE_DATABASE_URL': 'رابط قاعدة البيانات من Firebase',
+            'ADMIN_USERNAMES': 'قائمة أسماء المشرفين',
+            'PORT': 'منفذ التشغيل (مثال: 10000)',
+            'WEBHOOK_URL': 'رابط الويب هوك الخاص بتطبيقك على Render'
+        }
+
+        # التحقق من وجود جميع المتغيرات
+        missing_configs = []
+        for config, description in required_configs.items():
+            if not getattr(Config, config, None):
+                missing_configs.append(f"{config} ({description})")
+
+        if missing_configs:
+            raise ValueError(
+                "المتغيرات البيئية المفقودة:\n- " + 
+                "\n- ".join(missing_configs) +
+                "\n\nيرجى إضافتها في إعدادات Render Environment Variables"
+            )
+
         # تهيئة Firebase
+        if not Config.FIREBASE_SERVICE_ACCOUNT:
+            logger.warning("⚠️ لم يتم تعيين FIREBASE_SERVICE_ACCOUNT_JSON، قد تواجه مشاكل في التوثيق")
+        
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
-        
-        # التحقق من المتغيرات المطلوبة
-        required_vars = [
-            'BOT_TOKEN',
-            'PORT',
-            'WEBHOOK_URL',
-            'ADMIN_USERNAMES',
-            'FIREBASE_DATABASE_URL'
-        ]
-        
-        missing_vars = [var for var in required_vars if not getattr(Config, var, None)]
-        if missing_vars:
-            raise ValueError(f"المتغيرات المفقودة: {', '.join(missing_vars)}")
-            
-        # تحقق من وجود مشرفين على الأقل
+
+        # التحقق من وجود مشرفين
         if not Config.ADMIN_USERNAMES:
-            raise ValueError("يجب تعيين أسماء المشرفين في ADMIN_USERNAMES")
-            
-        logger.info(f"✅ تم تهيئة النظام بنجاح | عدد المشرفين: {len(Config.ADMIN_USERNAMES)}")
+            logger.warning("⚠️ لم يتم تعيين أي مشرفين في ADMIN_USERNAMES")
+
+        logger.info("✅ تم تهيئة النظام بنجاح")
         
     except Exception as e:
         logger.critical(f"❌ فشل تهيئة النظام: {str(e)}")
         raise
-
 def setup_handlers(application):
     """تسجيل جميع معالجات البوت مع الفصل بين المشرفين والمستخدمين"""
     try:
