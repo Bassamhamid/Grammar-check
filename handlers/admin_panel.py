@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, CommandHandler, filters
 from config import Config
 import logging
 from datetime import datetime
@@ -35,6 +35,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ لوحة تحكم المشرفين:\n\n"
             "اختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
@@ -162,7 +163,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 sent_count += 1
                 if sent_count % 10 == 0:
                     await status_msg.edit_text(f"⏳ جاري الإرسال... {sent_count}/{total_users}")
-            except Exception as e:
+            except Exception:
                 failed_count += 1
 
         await status_msg.edit_text(
