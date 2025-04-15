@@ -38,6 +38,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(
             "🛠️ لوحة تحكم المشرفين:\n\nاختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         message = update.message or update.callback_query.message
