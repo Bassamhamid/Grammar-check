@@ -42,7 +42,7 @@ async def initialize_system():
         logger.critical(f"❌ System initialization failed: {str(e)}")
         return False
 
-async def setup_handlers(application):
+def setup_handlers(application):
     """Register all bot handlers"""
     try:
         from handlers.start import setup_start_handlers
@@ -52,11 +52,11 @@ async def setup_handlers(application):
         from handlers.admin_panel import setup_admin_handlers
         
         # Setup all handlers
-        await setup_start_handlers(application)
-        await setup_text_handlers(application)
-        await setup_subscription_handlers(application)
-        await setup_premium_handlers(application)
-        await setup_admin_handlers(application)
+        setup_start_handlers(application)
+        setup_text_handlers(application)
+        setup_subscription_handlers(application)
+        setup_premium_handlers(application)
+        setup_admin_handlers(application)
         
         logger.info("✅ All handlers registered successfully")
         return True
@@ -74,7 +74,7 @@ async def run_bot():
             
         application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
-        if not await setup_handlers(application):
+        if not setup_handlers(application):
             sys.exit(1)
             
         application.add_error_handler(error_handler)
