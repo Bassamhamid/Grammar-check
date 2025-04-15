@@ -19,25 +19,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
         
-        # حساب الحدود بناءً على نوع المستخدم
+        # تعيين القيم الافتراضية بشكل آمن
+        current_time = time.time()
         request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
         char_limit = Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT
         reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
         
         request_count = user_data.get('request_count', 0)
-        reset_time = user_data.get('reset_time', time.time() + (reset_hours * 3600))
+        reset_time = user_data.get('reset_time', current_time + (reset_hours * 3600))
         
-        time_left = max(0, reset_time - time.time())
-        hours_left = max(0, int(time_left // 3600))
+        # حساب الوقت المتبقي مع معالجة الأخطاء
+        try:
+            time_left = max(0, float(reset_time) - current_time)
+            hours_left = max(0, int(time_left // 3600))
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error calculating time left: {str(e)}")
+            time_left = reset_hours * 3600
+            hours_left = reset_hours
+            reset_time = current_time + time_left
+            limiter.db.update_user(user_id, {'reset_time': reset_time})
+
         remaining_uses = max(0, request_limit - request_count)
         
         welcome_msg = f"""
-<b>✨ مرحباً بك في بوت التصحيح النحوي ✨</b>
+<b>✍️ مساعد الكتابة AI</b>
 
 <b>📊 إحصائيات حسابك:</b>
 - الطلبات المتبقية: <code>{remaining_uses}/{request_limit}</code>
 - وقت التجديد: بعد <code>{hours_left}</code> ساعة
 - الحد الأقصى للنص: <code>{char_limit}</code> حرفاً
+
+<b>💡 الخدمات المتاحة:</b>
+- تصحيح الأخطاء النحوية والإملائية
+- إعادة صياغة النصوص باحترافية
+
+📬 للاستفسارات: @info_all_tech
 """
         
         keyboard = [
@@ -51,6 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
             )
+            await update.callback_query.answer()
         else:
             await update.message.reply_text(
                 welcome_msg,
@@ -92,6 +109,10 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         char_limit = Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT
         request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
         
+        if not user_text or len(user_text.strip()) == 0:
+            await update.message.reply_text("⚠️ يرجى إرسال نص صالح للمعالجة")
+            return
+            
         if len(user_text) > char_limit:
             await update.message.reply_text(f"⚠️ النص يتجاوز الحد المسموح ({char_limit} حرفاً)")
             return
@@ -112,7 +133,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
-        context.user_data['last_text'] = user_text
+        context.user_data['last_text'] = user_text.strip()
         
     except Exception as e:
         logger.error(f"Error handling text input: {str(e)}")
@@ -208,6 +229,8 @@ async def show_api_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
    - {Config.PREMIUM_REQUEST_LIMIT} طلب يومياً
    - حد {Config.PREMIUM_CHAR_LIMIT} حرفاً للنص
    - أولوية في المعالجة
+
+📬 للاستفسارات: @info_all_tech
 """
         
         await query.edit_message_text(
