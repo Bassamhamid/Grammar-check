@@ -50,6 +50,10 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     try:
+        # تحديث البيانات من Firebase أولاً
+        firebase_db.update_stats()
+        
+        # ثم جلب البيانات المحدثة
         users = firebase_db.get_all_users()
         stats = firebase_db.get_stats()
 
