@@ -16,22 +16,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         user_id = update.effective_user.id
+        is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
         
+        # حساب الحدود بناءً على نوع المستخدم
+        request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
+        char_limit = Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT
+        reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
+        
         request_count = user_data.get('request_count', 0)
-        reset_time = user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
+        reset_time = user_data.get('reset_time', time.time() + (reset_hours * 3600))
         
         time_left = max(0, reset_time - time.time())
         hours_left = max(0, int(time_left // 3600))
-        remaining_uses = max(0, Config.REQUEST_LIMIT - request_count)
+        remaining_uses = max(0, request_limit - request_count)
         
         welcome_msg = f"""
 <b>✨ مرحباً بك في بوت التصحيح النحوي ✨</b>
 
 <b>📊 إحصائيات حسابك:</b>
-- الطلبات المتبقية: <code>{remaining_uses}/{Config.REQUEST_LIMIT}</code>
+- الطلبات المتبقية: <code>{remaining_uses}/{request_limit}</code>
 - وقت التجديد: بعد <code>{hours_left}</code> ساعة
-- الحد الأقصى للنص: <code>{Config.CHAR_LIMIT}</code> حرفاً
+- الحد الأقصى للنص: <code>{char_limit}</code> حرفاً
 """
         
         keyboard = [
@@ -79,14 +85,19 @@ async def show_normal_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = update.effective_user.id
+        is_premium = limiter.is_premium_user(user_id)
         user_text = update.message.text
         
-        if len(user_text) > Config.CHAR_LIMIT:
-            await update.message.reply_text(f"⚠️ النص يتجاوز الحد المسموح ({Config.CHAR_LIMIT} حرفاً)")
+        # تحديد الحدود بناءً على نوع المستخدم
+        char_limit = Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT
+        request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
+        
+        if len(user_text) > char_limit:
+            await update.message.reply_text(f"⚠️ النص يتجاوز الحد المسموح ({char_limit} حرفاً)")
             return
         
         user_data = limiter.db.get_user(user_id) or {}
-        if user_data.get('request_count', 0) >= Config.REQUEST_LIMIT:
+        if user_data.get('request_count', 0) >= request_limit:
             await update.message.reply_text("⚠️ لقد استنفذت عدد الطلبات اليومية. يرجى المحاولة لاحقاً.")
             return
         
@@ -113,6 +124,7 @@ async def handle_correction_choice(update: Update, context: ContextTypes.DEFAULT
         await query.answer()
         
         user_id = int(query.data.split('_')[1])
+        is_premium = limiter.is_premium_user(user_id)
         user_text = context.user_data.get('last_text', '')
         
         if not user_text:
@@ -123,13 +135,14 @@ async def handle_correction_choice(update: Update, context: ContextTypes.DEFAULT
         
         # استدعاء OpenRouter للتصحيح
         prompt = f"صحح الأخطاء النحوية والإملائية في النص التالي بدون ذكر النص الأصلي:\n{user_text}"
-        corrected_text = query_openrouter(prompt, user_id if limiter.is_premium_user(user_id) else None)
+        corrected_text = query_openrouter(prompt, user_id if is_premium else None)
         
         # تحديث عدد الطلبات
         current_user_data = limiter.db.get_user(user_id) or {}
+        new_count = current_user_data.get('request_count', 0) + 1
         limiter.db.update_user(user_id, {
-            'request_count': current_user_data.get('request_count', 0) + 1,
-            'reset_time': current_user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
+            'request_count': new_count,
+            'reset_time': current_user_data.get('reset_time', time.time() + (Config.PREMIUM_RESET_HOURS * 3600 if is_premium else Config.RESET_HOURS * 3600))
         })
         
         await query.edit_message_text(
@@ -147,6 +160,7 @@ async def handle_paraphrase_choice(update: Update, context: ContextTypes.DEFAULT
         await query.answer()
         
         user_id = int(query.data.split('_')[1])
+        is_premium = limiter.is_premium_user(user_id)
         user_text = context.user_data.get('last_text', '')
         
         if not user_text:
@@ -157,13 +171,14 @@ async def handle_paraphrase_choice(update: Update, context: ContextTypes.DEFAULT
         
         # استدعاء OpenRouter لإعادة الصياغة
         prompt = f"أعد صياغة النص التالي بلغة عربية سليمة بدون ذكر النص الأصلي:\n{user_text}"
-        paraphrased_text = query_openrouter(prompt, user_id if limiter.is_premium_user(user_id) else None)
+        paraphrased_text = query_openrouter(prompt, user_id if is_premium else None)
         
         # تحديث عدد الطلبات
         current_user_data = limiter.db.get_user(user_id) or {}
+        new_count = current_user_data.get('request_count', 0) + 1
         limiter.db.update_user(user_id, {
-            'request_count': current_user_data.get('request_count', 0) + 1,
-            'reset_time': current_user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
+            'request_count': new_count,
+            'reset_time': current_user_data.get('reset_time', time.time() + (Config.PREMIUM_RESET_HOURS * 3600 if is_premium else Config.RESET_HOURS * 3600))
         })
         
         await query.edit_message_text(
@@ -180,7 +195,7 @@ async def show_api_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
         
-        api_guide = """
+        api_guide = f"""
 <b>🔑 طريقة استخدام API شخصي:</b>
 
 1. احصل على مفتاح API مجاني من:
@@ -190,7 +205,8 @@ async def show_api_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
    <code>/setapi مفتاحك_السري</code>
 
 3. المميزات التي ستحصل عليها:
-   - طلبات غير محدودة
+   - {Config.PREMIUM_REQUEST_LIMIT} طلب يومياً
+   - حد {Config.PREMIUM_CHAR_LIMIT} حرفاً للنص
    - أولوية في المعالجة
 """
         
