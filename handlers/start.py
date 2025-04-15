@@ -126,8 +126,10 @@ async def handle_correction_choice(update: Update, context: ContextTypes.DEFAULT
         corrected_text = query_openrouter(prompt, user_id if limiter.is_premium_user(user_id) else None)
         
         # تحديث عدد الطلبات
+        current_user_data = limiter.db.get_user(user_id) or {}
         limiter.db.update_user(user_id, {
-            'request_count': user_data.get('request_count', 0) + 1
+            'request_count': current_user_data.get('request_count', 0) + 1,
+            'reset_time': current_user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
         })
         
         await query.edit_message_text(
@@ -158,8 +160,10 @@ async def handle_paraphrase_choice(update: Update, context: ContextTypes.DEFAULT
         paraphrased_text = query_openrouter(prompt, user_id if limiter.is_premium_user(user_id) else None)
         
         # تحديث عدد الطلبات
+        current_user_data = limiter.db.get_user(user_id) or {}
         limiter.db.update_user(user_id, {
-            'request_count': user_data.get('request_count', 0) + 1
+            'request_count': current_user_data.get('request_count', 0) + 1,
+            'reset_time': current_user_data.get('reset_time', time.time() + (Config.RESET_HOURS * 3600))
         })
         
         await query.edit_message_text(
