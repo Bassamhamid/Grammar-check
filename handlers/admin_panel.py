@@ -5,7 +5,7 @@ from telegram.ext import (
 )
 from config import Config
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from firebase_db import FirebaseDB
 
@@ -37,7 +37,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(
             "🛠️ لوحة تحكم المشرفين:\n\nاختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
@@ -47,30 +46,24 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     try:
-        # تحديث الإحصاءات فقط إذا مر أكثر من 10 ثواني منذ آخر تحديث
-        last_update = context.user_data.get('last_stats_update', 0)
-        if time.time() - last_update > 10:
-            firebase_db.update_stats()
-            context.user_data['last_stats_update'] = time.time()
-        
-        users = firebase_db.get_all_users()
+        firebase_db.update_stats()
         stats = firebase_db.get_stats()
+        users = firebase_db.get_all_users()
 
-        total_users = len(users)
-        active_today = sum(1 for u in users.values() 
-                         if u.get('last_active', '').startswith(datetime.now().date().isoformat()))
-        premium_users = sum(1 for u in users.values() if u.get('is_premium'))
-        banned_users = sum(1 for u in users.values() if u.get('is_banned'))
+        today = datetime.now().date().isoformat()
+        daily_requests = sum(
+            1 for u in users.values() 
+            if u.get('last_request', '').startswith(today)
+        )
 
         stats_text = (
             f"📊 الإحصائيات الحية (آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}):\n\n"
-            f"👥 إجمالي المستخدمين: {total_users}\n"
-            f"🟢 نشطين اليوم: {active_today}\n"
-            f"⭐ مستخدمين مميزين: {premium_users}\n"
-            f"⛔ مستخدمين محظورين: {banned_users}\n"
-            f"📨 طلبات اليوم: {stats.get('daily_requests', 0)}\n"
+            f"👥 إجمالي المستخدمين: {len(users)}\n"
+            f"⭐ مستخدمين مميزين: {sum(1 for u in users.values() if u.get('is_premium'))}\n"
+            f"⛔ مستخدمين محظورين: {sum(1 for u in users.values() if u.get('is_banned'))}\n"
+            f"📨 طلبات اليوم: {daily_requests}\n"
             f"📈 إجمالي الطلبات: {stats.get('total_requests', 0)}\n"
-            f"🆔: {int(time.time())}"  # إضافة معرف فريد لمنع خطأ الرسالة المتكررة
+            f"🔄 آخر تحديث للبيانات: {stats.get('last_updated', 'غير معروف')}"
         )
 
         keyboard = [
@@ -78,14 +71,10 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
         ]
 
-        try:
-            await query.edit_message_text(
-                text=stats_text,
-                reply_markup=InlineKeyboardMarkup(keyboard))
-        except Exception as e:
-            if "Message is not modified" not in str(e):
-                logger.error(f"Error editing stats message: {str(e)}")
-                await query.edit_message_text("⚠️ حدث خطأ في تحديث الإحصاءات")
+        await query.edit_message_text(
+            text=stats_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ خطأ في جلب الإحصائيات")
@@ -99,21 +88,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         "📝 اكتب الرسالة التي تريد إرسالها لجميع المستخدمين:",
         reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.username):
-        return
-
-    action = context.user_data.get('admin_action')
-    if not action:
-        return await handle_normal_message(update, context)
-
-    if action == 'broadcast':
-        await handle_broadcast_message(update, context)
-    elif action == 'search_user':
-        await handle_search_input(update, context)
-    elif action == 'edit_limits':
-        await save_new_limit(update, context)
 
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text
@@ -197,45 +171,60 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     search_term = update.message.text.strip()
     context.user_data['admin_action'] = None
 
-    user_data = None
-    user_id = None
-    
-    if search_term.isdigit():
-        user_id = int(search_term)
-        user_data = firebase_db.get_user(user_id)
-    else:
-        search_term = search_term.replace('@', '').lower()
-        user_data = firebase_db.get_user_by_username(search_term)
-        if user_data:
-            user_id = next((uid for uid, data in firebase_db.get_all_users().items() 
-                          if data.get('username', '').lower() == search_term), None)
+    try:
+        user_data = None
+        user_id = None
+        
+        if search_term.isdigit():
+            user_id = int(search_term)
+            user_data = firebase_db.get_user(user_id)
+        else:
+            search_term = search_term.replace('@', '').lower()
+            all_users = firebase_db.get_all_users()
+            for uid, data in all_users.items():
+                if data.get('username', '').lower() == search_term:
+                    user_id = uid
+                    user_data = data
+                    break
 
-    if not user_data or not user_id:
-        await update.message.reply_text("❌ لم يتم العثور على المستخدم.")
-        return
+        if not user_data or not user_id:
+            await update.message.reply_text("❌ لم يتم العثور على المستخدم.")
+            return
 
-    text = (
-        f"👤 معلومات المستخدم:\n\n"
-        f"🆔 ID: {user_id}\n"
-        f"👤 اسم المستخدم: @{user_data.get('username', 'غير معروف')}\n"
-        f"📅 تاريخ التسجيل: {datetime.fromtimestamp(user_data.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M')}\n"
-        f"⭐ حالة المميز: {'نعم' if user_data.get('is_premium') else 'لا'}\n"
-        f"⛔ حالة الحظر: {'نعم' if user_data.get('is_banned') else 'لا'}\n"
-        f"🔄 عدد الطلبات: {user_data.get('request_count', 0)}\n"
-        f"🕒 آخر نشاط: {user_data.get('last_active', 'غير معروف')}"
-    )
+        today = datetime.now().date().isoformat()
+        user_daily_requests = sum(
+            1 for req in user_data.get('requests_history', [])
+            if req.startswith(today)
+        )
 
-    keyboard = [
-        [
-            InlineKeyboardButton("🚫 حظر" if not user_data.get('is_banned') else "✅ رفع الحظر", 
-                               callback_data=f"admin_toggle_ban_{user_id}"),
-            InlineKeyboardButton("⭐ تفعيل مميز" if not user_data.get('is_premium') else "❌ إلغاء المميز", 
-                               callback_data=f"admin_toggle_premium_{user_id}")
-        ],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_manage_users")]
-    ]
+        text = (
+            f"👤 معلومات المستخدم:\n\n"
+            f"🆔 ID: {user_id}\n"
+            f"👤 اسم المستخدم: @{user_data.get('username', 'غير معروف')}\n"
+            f"📅 تاريخ التسجيل: {datetime.fromtimestamp(user_data.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M')}\n"
+            f"⭐ حالة المميز: {'نعم' if user_data.get('is_premium') else 'لا'}\n"
+            f"⛔ حالة الحظر: {'نعم' if user_data.get('is_banned') else 'لا'}\n"
+            f"📊 الطلبات اليومية: {user_daily_requests}\n"
+            f"📈 إجمالي الطلبات: {user_data.get('total_requests', 0)}\n"
+            f"🕒 آخر نشاط: {user_data.get('last_active', 'غير معروف')}"
+        )
 
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard = [
+            [
+                InlineKeyboardButton("🚫 حظر" if not user_data.get('is_banned') else "✅ رفع الحظر", 
+                                   callback_data=f"admin_toggle_ban_{user_id}"),
+                InlineKeyboardButton("⭐ تفعيل مميز" if not user_data.get('is_premium') else "❌ إلغاء المميز", 
+                                   callback_data=f"admin_toggle_premium_{user_id}")
+            ],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_manage_users")]
+        ]
+
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+    except Exception as e:
+        logger.error(f"Error in handle_search_input: {str(e)}", exc_info=True)
+        await update.message.reply_text("⚠️ حدث خطأ أثناء البحث عن المستخدم")
 
 async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
     query = update.callback_query
@@ -306,19 +295,18 @@ async def toggle_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['admin_action'] = 'edit_limits'
-    context.user_data['limit_type'] = query.data
     
-    current_settings = firebase_db.get_settings()
-    current_value = {
-        'admin_edit_normal_limit': current_settings.get('normal_text_limit', Config.CHAR_LIMIT),
-        'admin_edit_premium_limit': current_settings.get('premium_text_limit', Config.PREMIUM_CHAR_LIMIT),
-        'admin_edit_daily_limit': current_settings.get('daily_limit', Config.REQUEST_LIMIT),
-        'admin_edit_premium_daily_limit': current_settings.get('premium_daily_limit', Config.PREMIUM_REQUEST_LIMIT)
-    }.get(query.data, 0)
+    keyboard = [
+        [InlineKeyboardButton("📝 حد النص العادي", callback_data="admin_edit_normal_limit")],
+        [InlineKeyboardButton("📝 حد النص المميز", callback_data="admin_edit_premium_limit")],
+        [InlineKeyboardButton("🔢 عدد الطلبات اليومية", callback_data="admin_edit_daily_limit")],
+        [InlineKeyboardButton("🔢 عدد طلبات المميز", callback_data="admin_edit_premium_daily_limit")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_settings")]
+    ]
     
     await query.edit_message_text(
-        f"✏️ الرجاء إرسال القيمة الجديدة (الحالية: {current_value}):")
+        "✏️ اختر الحد الذي تريد تعديله:",
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def save_new_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -329,30 +317,44 @@ async def save_new_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ انتهت الجلسة، يرجى المحاولة مرة أخرى")
             return await admin_panel(update, context)
         
-        updates = {
-            'admin_edit_normal_limit': {'normal_text_limit': new_value},
-            'admin_edit_premium_limit': {'premium_text_limit': new_value},
-            'admin_edit_daily_limit': {'daily_limit': new_value},
-            'admin_edit_premium_daily_limit': {'premium_daily_limit': new_value}
-        }.get(limit_type, {})
+        update_field = {
+            'admin_edit_normal_limit': 'normal_text_limit',
+            'admin_edit_premium_limit': 'premium_text_limit',
+            'admin_edit_daily_limit': 'daily_limit',
+            'admin_edit_premium_daily_limit': 'premium_daily_limit'
+        }.get(limit_type)
         
-        if updates:
-            firebase_db.update_settings(updates)
-            await update.message.reply_text("✅ تم تحديث الحد بنجاح!")
+        if update_field:
+            firebase_db.update_settings({
+                update_field: new_value,
+                'last_updated': time.time()
+            })
+            await update.message.reply_text(f"✅ تم تحديث الحد {update_field} إلى {new_value} بنجاح!")
+            return await settings(update, context)
         else:
             await update.message.reply_text("⚠️ نوع الحد غير معروف")
-        
-        return await settings(update, context)
+            return await admin_panel(update, context)
+            
     except ValueError:
         await update.message.reply_text("⚠️ يجب إدخال رقم صحيح")
     except Exception as e:
-        logger.error(f"Error saving limits: {str(e)}")
+        logger.error(f"Error saving limits: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ أثناء حفظ التعديلات")
 
-async def handle_normal_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الرسائل العادية للمشرفين"""
-    if is_admin(update.effective_user.username):
-        await update.message.reply_text("ℹ️ اختر أحد الخيارات من لوحة التحكم")
+async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.username):
+        return
+
+    action = context.user_data.get('admin_action')
+    if not action:
+        return await update.message.reply_text("ℹ️ اختر أحد الخيارات من لوحة التحكم")
+
+    if action == 'broadcast':
+        await handle_broadcast_message(update, context)
+    elif action == 'search_user':
+        await handle_search_input(update, context)
+    elif action == 'edit_limits':
+        await save_new_limit(update, context)
 
 def setup_admin_handlers(application):
     admin_filter = filters.ChatType.PRIVATE & filters.User(username=Config.ADMIN_USERNAMES)
@@ -372,8 +374,9 @@ def setup_admin_handlers(application):
     application.add_handler(CallbackQueryHandler(settings, pattern="^admin_settings$"))
     application.add_handler(CallbackQueryHandler(toggle_maintenance, pattern="^admin_toggle_maintenance$"))
     application.add_handler(CallbackQueryHandler(edit_limits, pattern="^admin_edit_limits$"))
+    application.add_handler(CallbackQueryHandler(edit_limits, pattern="^admin_edit_.*_limit$"))
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_back$"))
     application.add_handler(MessageHandler(
         admin_filter & filters.TEXT & ~filters.COMMAND,
         handle_admin_message
     ))
-    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_back$"))
