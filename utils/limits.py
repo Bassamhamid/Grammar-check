@@ -22,7 +22,7 @@ class UsageLimiter:
             reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
             
             # ضبط القيم الافتراضية
-            reset_time = user_data.get('reset_time') or (current_time + (reset_hours * 3600))
+            reset_time = float(user_data.get('reset_time', current_time + (reset_hours * 3600)))
             request_count = user_data.get('request_count', 0)
             
             # إعادة تعيين العداد إذا انتهت المدة
@@ -45,27 +45,35 @@ class UsageLimiter:
     def increment_usage(self, user_id: int):
         try:
             is_premium = user_id in self.premium_users
-            reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
-            
             user_data = self.db.get_user(user_id)
             current_time = time.time()
-            reset_time = user_data.get('reset_time') or (current_time + (reset_hours * 3600))
-            request_count = user_data.get('request_count', 0)
             
-            if current_time > reset_time:
-                reset_time = current_time + (reset_hours * 3600)
-                request_count = 0
+            # تحديث الإحصائيات العامة
+            stats = self.db.get_stats()
+            self.db.update_stats({
+                'total_requests': stats.get('total_requests', 0) + 1,
+                'daily_requests': stats.get('daily_requests', 0) + 1
+            })
             
+            # تحديث بيانات المستخدم
             self.db.update_user(user_id, {
-                'request_count': request_count + 1,
-                'last_request': int(current_time),
-                'reset_time': reset_time,
+                'request_count': user_data.get('request_count', 0) + 1,
+                'last_request': current_time,
                 'is_premium': is_premium
             })
             
         except Exception as e:
             logger.error(f"Error in increment_usage: {str(e)}", exc_info=True)
             raise
+
+    def get_daily_requests_count(self) -> int:
+        """الحصول على عدد الطلبات اليومية"""
+        try:
+            stats = self.db.get_stats()
+            return stats.get('daily_requests', 0)
+        except Exception as e:
+            logger.error(f"Error in get_daily_requests_count: {str(e)}")
+            return 0
 
     def set_premium_user(self, user_id: int, api_key: str):
         self.premium_users[user_id] = {
