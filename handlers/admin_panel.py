@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters, CommandHandler
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from config import Config
 import logging
 from datetime import datetime
@@ -81,7 +81,6 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             stats_text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-            
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإحصائيات")
@@ -113,7 +112,6 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             users_text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-            
     except Exception as e:
         logger.error(f"Error in manage_users: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب بيانات المستخدمين")
@@ -172,7 +170,6 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📤 تم الإرسال لـ: {sent_count} مستخدم\n"
             f"❌ فشل الإرسال لـ: {failed_count} مستخدم")
         await admin_panel(update, context)
-
     except Exception as e:
         logger.error(f"Error in send_broadcast: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ أثناء الإرسال")
@@ -203,7 +200,6 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             settings_text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-            
     except Exception as e:
         logger.error(f"Error in show_settings: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإعدادات")
