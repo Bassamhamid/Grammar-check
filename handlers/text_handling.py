@@ -10,6 +10,9 @@ import time
 logger = logging.getLogger(__name__)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # استثناء رسائل المشرفين
+    if is_admin(update.effective_user.username) and not context.user_data.get('processing_text'):
+        return
     try:
         # التحقق من الاشتراك
         if not await check_subscription(update, context):
