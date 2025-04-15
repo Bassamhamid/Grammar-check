@@ -48,6 +48,13 @@ async def unset_api(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in unset_api: {str(e)}")
         await update.message.reply_text("⚠️ حدث خطأ أثناء إلغاء التفعيل.")
 
-def setup(application):
+def setup_premium_handlers(application):
+    """
+    إعداد معالجات الميزات المميزة (Premium)
+    """
     application.add_handler(CommandHandler("setapi", set_api))
     application.add_handler(CommandHandler("unsetapi", unset_api))
+
+# للحفاظ على التوافق مع الإصدارات القديمة
+def setup(application):
+    setup_premium_handlers(application)
