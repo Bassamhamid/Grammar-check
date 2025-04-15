@@ -15,7 +15,8 @@ firebase_db = FirebaseDB()
 
 def is_admin(user_id):
     return str(user_id) in [str(admin_id) for admin_id in Config.ADMIN_IDS]
-    async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not is_admin(update.effective_user.id):
             await update.message.reply_text("⛔ ليس لديك صلاحية الدخول")
@@ -74,7 +75,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ خطأ في جلب الإحصائيات")
-        async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['broadcast_mode'] = True
@@ -127,7 +129,8 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📤 وصل إلى: {success_count}\n"
         f"❌ لم يصل: {failed_count}"
     )
-    async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -177,7 +180,8 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     ]
 
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -201,7 +205,8 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         user_id = data.split("_")[1]
         firebase_db.update_user(user_id, {"is_premium": False})
         await query.edit_message_text(f"❌ تم إلغاء المميز عن {user_id}.")
-        async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -226,3 +231,16 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     ]
 
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+def setup_admin_handlers(application):
+    application.add_handler(CommandHandler("admin", admin_panel))
+    application.add_handler(CallbackQueryHandler(show_stats, pattern="^real_stats$"))
+    application.add_handler(CallbackQueryHandler(broadcast, pattern="^broadcast$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message))
+    application.add_handler(CallbackQueryHandler(confirm_broadcast, pattern="^confirm_broadcast$"))
+    application.add_handler(CallbackQueryHandler(manage_users, pattern="^manage_users$"))
+    application.add_handler(CallbackQueryHandler(search_user, pattern="^search_user$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_input))
+    application.add_handler(CallbackQueryHandler(manage_user_action, pattern="^ban_|^unban_|^premium_|^unpremium_"))
+    application.add_handler(CallbackQueryHandler(settings, pattern="^settings$"))
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^back_to_admin$"))
