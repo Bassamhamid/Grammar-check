@@ -13,9 +13,10 @@ from handlers.start import setup_start_handlers
 from handlers.text_handling import handle_message, handle_callback
 from handlers.subscription import check_subscription, verify_subscription_callback
 from handlers.premium import setup as setup_premium
-from handlers.admin_panel import setup_admin_handlers  # الجديد
+from handlers.admin_panel import setup_admin_handlers
 import logging
 import os
+import sys
 
 # تهيئة النظام
 logging.basicConfig(
@@ -34,12 +35,19 @@ def initialize_system():
         initialize_firebase()
         logger.info("✅ تم تهيئة Firebase بنجاح")
         
-        required_vars = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'ADMIN_IDS']  # أضفنا ADMIN_IDS
+        # قائمة المتغيرات المطلوبة (تم تحديثها لاستخدام ADMIN_USERNAMES بدلاً من ADMIN_IDS)
+        required_vars = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'ADMIN_USERNAMES']
+        
         for var in required_vars:
             if not getattr(Config, var, None):
                 raise ValueError(f"المتغير {var} غير موجود في الإعدادات")
                 
-        logger.info("✅ تم التحقق من الإعدادات بنجاح")
+        # تحقق إضافي للتأكد من وجود مشرفين على الأقل
+        if not Config.ADMIN_USERNAMES:
+            raise ValueError("يجب تعيين أسماء المشرفين في ADMIN_USERNAMES")
+            
+        logger.info(f"✅ تم التحقق من الإعدادات بنجاح | المشرفون: {Config.ADMIN_USERNAMES}")
+        
     except Exception as e:
         logger.critical(f"❌ فشل تهيئة النظام: {str(e)}")
         raise
@@ -47,7 +55,7 @@ def initialize_system():
 def setup_all_handlers(application):
     """تسجيل جميع معالجات البوت"""
     setup_start_handlers(application)
-    setup_admin_handlers(application)  # الجديد
+    setup_admin_handlers(application)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite|cancel_api|use_api)$"))
     application.add_handler(CallbackQueryHandler(verify_subscription_callback, pattern="^check_subscription$"))
@@ -77,7 +85,7 @@ def main():
             
     except Exception as e:
         logger.critical(f"🔥 تعطل البوت: {str(e)}")
-        exit(1)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
