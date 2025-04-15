@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from config import Config
 from utils.limits import limiter
 from utils.openrouter import query_openrouter
@@ -127,3 +127,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in handle_callback: {str(e)}", exc_info=True)
         await query.edit_message_text("❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة لاحقاً.")
+
+def setup_text_handlers(application):
+    """إعداد معالجات النصوص والردود"""
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(correct|rewrite)$"))
