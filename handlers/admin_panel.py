@@ -83,8 +83,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             stats_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
+            
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإحصائيات")
@@ -116,8 +115,7 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             users_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
+            
     except Exception as e:
         logger.error(f"Error in manage_users: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب بيانات المستخدمين")
@@ -209,7 +207,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             settings_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
             
     except Exception as e:
         logger.error(f"Error in show_settings: {str(e)}", exc_info=True)
@@ -224,5 +222,5 @@ def setup_admin_handlers(application):
     application.add_handler(CallbackQueryHandler(broadcast_message, pattern="^broadcast$"))
     application.add_handler(CallbackQueryHandler(manage_users, pattern="^manage_users$"))
     application.add_handler(CallbackQueryHandler(show_settings, pattern="^settings$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast))
     application.add_handler(CallbackQueryHandler(back_to_admin, pattern="^back_to_admin$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast))
