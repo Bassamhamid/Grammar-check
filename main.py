@@ -42,25 +42,27 @@ async def initialize_system():
         logger.critical(f"❌ System initialization failed: {str(e)}")
         return False
 
+# تعديل ترتيب تسجيل المعالجات
 def setup_handlers(application):
     """Register all bot handlers"""
     try:
+        # تسجيل معالجات المشرفين أولاً
+        from handlers.admin_panel import setup_admin_handlers
+        setup_admin_handlers(application)
+        
+        # ثم باقي المعالجات
         from handlers.start import setup_start_handlers
         from handlers.text_handling import setup_text_handlers
         from handlers.subscription import setup_subscription_handlers
         from handlers.premium import setup_premium_handlers
-        from handlers.admin_panel import setup_admin_handlers
         
-        # Setup all handlers
         setup_start_handlers(application)
         setup_text_handlers(application)
         setup_subscription_handlers(application)
         setup_premium_handlers(application)
-        setup_admin_handlers(application)
         
         logger.info("✅ All handlers registered successfully")
         return True
-        
     except Exception as e:
         logger.error(f"Failed to register handlers: {str(e)}")
         return False
