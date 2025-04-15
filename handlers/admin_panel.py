@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from config import Config
 import logging
 from datetime import datetime
@@ -39,19 +39,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
 
-async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
+async def get_user_stats():
     try:
-        # جلب البيانات من Firebase
         users_ref = db.reference('users')
         stats_ref = db.reference('stats')
         
         users = users_ref.get() or {}
         stats = stats_ref.get() or {}
 
-        # حساب الإحصائيات
         total_users = len(users)
         active_today = 0
         premium_users = 0
@@ -67,18 +62,35 @@ async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_data.get('is_banned', False):
                 banned_users += 1
 
-        total_requests = stats.get('total_requests', 0)
-        daily_requests = stats.get('daily_requests', 0)
+        return {
+            'total_users': total_users,
+            'active_today': active_today,
+            'premium_users': premium_users,
+            'banned_users': banned_users,
+            'total_requests': stats.get('total_requests', 0),
+            'daily_requests': stats.get('daily_requests', 0)
+        }
+    except Exception as e:
+        logger.error(f"Error getting user stats: {str(e)}", exc_info=True)
+        return None
 
-        # إنشاء نص الإحصائيات
+async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        stats = await get_user_stats()
+        if stats is None:
+            raise Exception("Failed to get stats")
+
         stats_text = (
             "📊 الإحصائيات الحية:\n\n"
-            f"👥 إجمالي المستخدمين: {total_users}\n"
-            f"🟢 نشطين اليوم: {active_today}\n"
-            f"📨 طلبات اليوم: {daily_requests}\n"
-            f"📈 إجمالي الطلبات: {total_requests}\n"
-            f"⭐ مستخدمين مميزين: {premium_users}\n"
-            f"⛔ مستخدمين محظورين: {banned_users}\n\n"
+            f"👥 إجمالي المستخدمين: {stats['total_users']}\n"
+            f"🟢 نشطين اليوم: {stats['active_today']}\n"
+            f"📨 طلبات اليوم: {stats['daily_requests']}\n"
+            f"📈 إجمالي الطلبات: {stats['total_requests']}\n"
+            f"⭐ مستخدمين مميزين: {stats['premium_users']}\n"
+            f"⛔ مستخدمين محظورين: {stats['banned_users']}\n\n"
             f"🔄 آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
@@ -97,15 +109,11 @@ async def handle_real_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in real stats: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإحصائيات")
 
-async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
+async def get_recent_users(limit=10):
     try:
-        # جلب بيانات المستخدمين من Firebase بدون ترتيب
         users_ref = db.reference('users')
-        users = users_ref.limit_to_last(10).get() or {}
-
+        users = users_ref.limit_to_last(limit).get() or {}
+        
         users_list = []
         for user_id, user_data in users.items():
             users_list.append(
@@ -113,6 +121,19 @@ async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{'⭐' if user_data.get('is_premium', False) else '🔹'}"
                 f"{'⛔' if user_data.get('is_banned', False) else ''}"
             )
+        return users_list
+    except Exception as e:
+        logger.error(f"Error getting recent users: {str(e)}", exc_info=True)
+        return None
+
+async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        users_list = await get_recent_users()
+        if users_list is None:
+            raise Exception("Failed to get users")
 
         users_text = "👥 آخر 10 مستخدمين:\n\n" + "\n".join(users_list) if users_list else "⚠️ لا يوجد مستخدمين مسجلين"
 
@@ -125,7 +146,8 @@ async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             users_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
-            
+        )
+
     except Exception as e:
         logger.error(f"Error in users management: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب بيانات المستخدمين")
@@ -162,8 +184,6 @@ async def handle_real_settings(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error in settings: {str(e)}", exc_info=True)
         await query.edit_message_text("⚠️ حدث خطأ في جلب الإعدادات")
 
-# باقي الدوال (handle_real_broadcast, send_real_broadcast, handle_refresh_all) تبقى كما هي
-
 async def handle_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -199,7 +219,6 @@ async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE
             await admin_panel(update, context)
             return
 
-        # جلب جميع المستخدمين
         users_ref = db.reference('users')
         users = users_ref.get() or {}
 
@@ -214,7 +233,6 @@ async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE
                 if user_data.get('is_banned', False):
                     continue
 
-                # إرسال الرسالة فعلياً
                 await context.bot.send_message(
                     chat_id=int(user_id),
                     text=message,
@@ -222,7 +240,6 @@ async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 sent_count += 1
 
-                # تحديث حالة الإرسال كل 10 رسائل
                 if sent_count % 10 == 0:
                     await status_msg.edit_text(f"⏳ جاري الإرسال... {sent_count}/{total_users}")
 
@@ -230,11 +247,9 @@ async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE
                 logger.error(f"Failed to send to {user_id}: {str(e)}")
                 failed_count += 1
 
-            # التحقق من الحد الأقصى للمستخدمين إذا كان محدداً
             if Config.MAX_BROADCAST_USERS and sent_count >= Config.MAX_BROADCAST_USERS:
                 break
 
-        # إرسال تقرير النتائج
         report = (
             f"✅ تقرير الإرسال:\n\n"
             f"📤 تم الإرسال بنجاح: {sent_count}\n"
@@ -251,76 +266,11 @@ async def send_real_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE
     finally:
         context.user_data.pop('awaiting_broadcast', None)
 
-async def handle_real_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        # جلب بيانات المستخدمين من Firebase
-        users_ref = db.reference('users')
-        users = users_ref.order_by_child('timestamp').limit_to_last(10).get() or {}
-
-        users_list = []
-        for user_id, user_data in users.items():
-            users_list.append(
-                f"👤 {user_data.get('name', 'مجهول')} - "
-                f"{'⭐' if user_data.get('is_premium', False) else '🔹'}"
-                f"{'⛔' if user_data.get('is_banned', False) else ''}"
-            )
-
-        users_text = "👥 آخر 10 مستخدمين:\n\n" + "\n".join(users_list) if users_list else "⚠️ لا يوجد مستخدمين مسجلين"
-
-        keyboard = [
-            [InlineKeyboardButton("🔄 تحديث", callback_data="real_users")],
-            [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
-        ]
-
-        await query.edit_message_text(
-            users_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-    except Exception as e:
-        logger.error(f"Error in users management: {str(e)}", exc_info=True)
-        await query.edit_message_text("⚠️ حدث خطأ في جلب بيانات المستخدمين")
-
-async def handle_real_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        settings_text = (
-            "⚙️ إعدادات البوت:\n\n"
-            f"🔧 وضع الصيانة: {'✅ مفعل' if MAINTENANCE_MODE else '❌ معطل'}\n"
-            f"📝 حد النص العادي: {Config.CHAR_LIMIT} حرف\n"
-            f"💎 حد النص المميز: {Config.PREMIUM_CHAR_LIMIT} حرف\n"
-            f"📨 طلبات اليوم: {limiter.get_daily_requests_count()}"
-        )
-
-        keyboard = [
-            [
-                InlineKeyboardButton("🔧 تبديل الصيانة", callback_data="toggle_maintenance"),
-                InlineKeyboardButton("🔄 تحديث", callback_data="real_settings")
-            ],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
-        ]
-
-        await query.edit_message_text(
-            settings_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-    except Exception as e:
-        logger.error(f"Error in settings: {str(e)}", exc_info=True)
-        await query.edit_message_text("⚠️ حدث خطأ في جلب الإعدادات")
-
 async def handle_refresh_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("جارٍ تحديث جميع البيانات...")
     
     try:
-        # تحديث جميع الإحصائيات
         await handle_real_stats(update, context)
     except Exception as e:
         logger.error(f"Error in refresh all: {str(e)}", exc_info=True)
