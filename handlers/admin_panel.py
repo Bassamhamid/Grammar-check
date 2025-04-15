@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 from config import Config
 import logging
 from datetime import datetime
@@ -35,8 +35,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🛠️ لوحة تحكم المشرفين:\n\n"
             "اختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
@@ -82,7 +80,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             stats_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
             
     except Exception as e:
         logger.error(f"Error in show_stats: {str(e)}", exc_info=True)
@@ -114,7 +112,7 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             users_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
             
     except Exception as e:
         logger.error(f"Error in manage_users: {str(e)}", exc_info=True)
@@ -130,8 +128,7 @@ async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "يمكنك استخدام تنسيق Markdown مثل:\n"
             "*عريض* _مائل_ `كود`\n\n"
             "أو /cancel للإلغاء",
-            parse_mode="Markdown"
-        )
+            parse_mode="Markdown")
         context.user_data['awaiting_broadcast'] = True
     except Exception as e:
         logger.error(f"Error in broadcast_message: {str(e)}", exc_info=True)
@@ -163,8 +160,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(
                     chat_id=int(user_id),
                     text=message,
-                    parse_mode="Markdown"
-                )
+                    parse_mode="Markdown")
                 sent_count += 1
                 if sent_count % 10 == 0:
                     await status_msg.edit_text(f"⏳ جاري الإرسال... {sent_count}/{total_users}")
@@ -174,8 +170,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(
             f"✅ تم إرسال الإشعار بنجاح:\n"
             f"📤 تم الإرسال لـ: {sent_count} مستخدم\n"
-            f"❌ فشل الإرسال لـ: {failed_count} مستخدم"
-        )
+            f"❌ فشل الإرسال لـ: {failed_count} مستخدم")
         await admin_panel(update, context)
 
     except Exception as e:
