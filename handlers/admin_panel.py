@@ -37,6 +37,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(
             "🛠️ لوحة تحكم المشرفين:\n\nاختر الخيار المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
         await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
@@ -221,7 +222,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await update.message.reply_text(
             text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error in handle_search_input: {str(e)}", exc_info=True)
         await update.message.reply_text("⚠️ حدث خطأ أثناء البحث عن المستخدم")
