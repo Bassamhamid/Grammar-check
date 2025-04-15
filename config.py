@@ -12,15 +12,15 @@ class Config:
     
     # Channel Configuration
     CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "your_channel")  # بدون @
-    CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/your_channel")  # رابط القناة
+    CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/your_channel")
     
-    # Usage Limits - تم التحديث حسب متطلباتك
-    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "120"))  # للمستخدمين العاديين
-    PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", "500"))  # للمستخدمين المميزين
-    REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))  # للمستخدمين العاديين (زاد من 3 إلى 10)
-    PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))  # للمستخدمين المميزين
-    RESET_HOURS = int(os.getenv("RESET_HOURS", "24"))  # وقت تجديد الطلبات للعاديين
-    PREMIUM_RESET_HOURS = int(os.getenv("PREMIUM_RESET_HOURS", "24"))  # وقت تجديد الطلبات للمميزين
+    # Usage Limits
+    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "120"))
+    PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", "500"))
+    REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))
+    PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))
+    RESET_HOURS = int(os.getenv("RESET_HOURS", "24"))
+    PREMIUM_RESET_HOURS = int(os.getenv("PREMIUM_RESET_HOURS", "24"))
     
     # Webhook
     WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-app.onrender.com")
@@ -37,19 +37,22 @@ class Config:
     # Timeout Settings
     REQUEST_TIMEOUT = timedelta(seconds=30)
 
-    # Admin Settings
+    # Admin Settings - تم التعديل هنا لاستخدام usernames بدلاً من IDs
     @staticmethod
-    def get_admin_ids():
-        admin_ids = os.getenv("ADMIN_IDS", "").strip()
-        if not admin_ids:
+    def get_admin_usernames():
+        admins = os.getenv("ADMIN_USERNAMES", "").strip()
+        if not admins:
             return []
         
         try:
-            return [int(id.strip()) for id in admin_ids.split(',') if id.strip().isdigit()]
+            # تقسيم الأسماء بفاصلة وإزالة أي مسافات أو @
+            return [username.strip().lower().replace('@', '') 
+                   for username in admins.split(',') 
+                   if username.strip()]
         except Exception as e:
-            print(f"Error parsing ADMIN_IDS: {e}")
+            print(f"Error parsing ADMIN_USERNAMES: {e}")
             return []
 
-    ADMIN_IDS = get_admin_ids()
+    ADMIN_USERNAMES = get_admin_usernames()
     MAX_BROADCAST_USERS = int(os.getenv("MAX_BROADCAST_USERS", "1000"))
     BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
