@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 from config import Config
 
@@ -49,7 +49,6 @@ async def send_subscription_message(update: Update, context: ContextTypes.DEFAUL
     else:
         await update.message.reply_text(message, reply_markup=keyboard)
 
-# أضف هذه الدالة الجديدة
 async def verify_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -61,3 +60,12 @@ async def verify_subscription_callback(update: Update, context: ContextTypes.DEF
         await start(update, context)
     else:
         await query.answer("⚠️ لم يتم التحقق من اشتراكك بعد. يرجى الانضمام للقناة أولاً.", show_alert=True)
+
+def setup_subscription_handlers(application):
+    """
+    إعداد معالجات الاشتراك في القناة
+    """
+    application.add_handler(CallbackQueryHandler(
+        verify_subscription_callback,
+        pattern="^check_subscription$"
+    ))
