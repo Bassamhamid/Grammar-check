@@ -5,9 +5,8 @@ from telegram.ext import (
 )
 from config import Config
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
-import random
 from firebase_db import FirebaseDB
 
 logger = logging.getLogger(__name__)
@@ -29,10 +28,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         keyboard = [
-            [InlineKeyboardButton("📊 الإحصائيات الحية", callback_data="real_stats")],
-            [InlineKeyboardButton("📢 إرسال إشعار عام", callback_data="broadcast")],
-            [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="manage_users")],
-            [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
+            [InlineKeyboardButton("📊 الإحصائيات الحية", callback_data="admin_stats")],
+            [InlineKeyboardButton("📢 إرسال إشعار عام", callback_data="admin_broadcast")],
+            [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="admin_manage_users")],
+            [InlineKeyboardButton("⚙️ الإعدادات", callback_data="admin_settings")]
         ]
         
         await message.reply_text(
@@ -41,38 +40,28 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         logger.error(f"Error in admin_panel: {str(e)}", exc_info=True)
-        if update.message or update.callback_query:
-            message = update.message or update.callback_query.message
-            await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
+        await message.reply_text("⚠️ حدث خطأ في تحميل لوحة التحكم")
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     try:
-        # تحديث البيانات من Firebase أولاً
+        # تحديث الإحصاءات أولاً
         firebase_db.update_stats()
         
-        # ثم جلب البيانات المحدثة
+        # جلب البيانات المحدثة
         users = firebase_db.get_all_users()
         stats = firebase_db.get_stats()
 
         total_users = len(users)
-        active_today = 0
-        premium_users = 0
-        banned_users = 0
-        today = datetime.now().date().isoformat()
-
-        for user_data in users.values():
-            if user_data.get('last_active', '').startswith(today):
-                active_today += 1
-            if user_data.get('is_premium'):
-                premium_users += 1
-            if user_data.get('is_banned'):
-                banned_users += 1
+        active_today = sum(1 for u in users.values() 
+                        if u.get('last_active', '').startswith(datetime.now().date().isoformat()))
+        premium_users = sum(1 for u in users.values() if u.get('is_premium'))
+        banned_users = sum(1 for u in users.values() if u.get('is_banned'))
 
         stats_text = (
-            f"📊 الإحصائيات الحية (التحديث: {random.randint(1, 1000)}):\n\n"
+            f"📊 الإحصائيات الحية (آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M')}):\n\n"
             f"👥 إجمالي المستخدمين: {total_users}\n"
             f"🟢 نشطين اليوم: {active_today}\n"
             f"⭐ مستخدمين مميزين: {premium_users}\n"
@@ -82,8 +71,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         keyboard = [
-            [InlineKeyboardButton("🔄 تحديث", callback_data="real_stats")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+            [InlineKeyboardButton("🔄 تحديث", callback_data="admin_stats")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
         ]
 
         await query.edit_message_text(
@@ -96,31 +85,40 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['broadcast_mode'] = True
+    context.user_data['admin_action'] = 'broadcast'
     
-    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]]
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="admin_back")]]
     await query.edit_message_text(
         "📝 اكتب الرسالة التي تريد إرسالها لجميع المستخدمين:",
         reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.username):
         return
-        
-    if not context.user_data.get('broadcast_mode'):
-        # إضافة هذا الشرط لمنع التعارض مع معالجات النصوص
+
+    action = context.user_data.get('admin_action')
+    if not action:
         return await handle_normal_message(update, context)
 
-    context.user_data['broadcast_message'] = update.message.text
-    context.user_data['broadcast_mode'] = False
+    if action == 'broadcast':
+        await handle_broadcast_message(update, context)
+    elif action == 'search_user':
+        await handle_search_input(update, context)
+    elif action == 'edit_limits':
+        await save_new_limit(update, context)
+
+async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message.text
+    context.user_data['broadcast_message'] = message
+    context.user_data['admin_action'] = None
 
     keyboard = [
-        [InlineKeyboardButton("✅ تأكيد الإرسال", callback_data="confirm_broadcast")],
-        [InlineKeyboardButton("❌ إلغاء", callback_data="back_to_admin")]
+        [InlineKeyboardButton("✅ تأكيد الإرسال", callback_data="admin_confirm_broadcast")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="admin_back")]
     ]
     
     await update.message.reply_text(
-        f"📨 هذه هي الرسالة:\n\n{update.message.text}",
+        f"📨 هذه هي الرسالة:\n\n{message}",
         reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -133,37 +131,46 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     users = firebase_db.get_all_users()
-    success_count = 0
-    failed_count = 0
+    success = 0
+    failed = 0
+    blocked = 0
 
     await query.edit_message_text("⏳ جاري إرسال الإشعار لجميع المستخدمين...")
 
     for user_id, user_data in users.items():
         try:
-            if not user_data.get('is_banned'):
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=f"📢 إشعار عام:\n\n{message}"
-                )
-                success_count += 1
-                time.sleep(0.1)
+            # تخطي المستخدمين المحظورين أو الذين لم يبدأوا محادثة
+            if user_data.get('is_banned') or not user_data.get('started_chat', True):
+                blocked += 1
+                continue
+                
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"📢 إشعار عام من الإدارة:\n\n{message}"
+            )
+            success += 1
+            time.sleep(0.3)  # تقليل الضغط على السيرفر
         except Exception as e:
+            failed += 1
             logger.error(f"Failed to send to {user_id}: {str(e)}")
-            failed_count += 1
+            # تحديث حالة المستخدم إذا كان قد حظر البوت
+            if "chat not found" in str(e).lower():
+                firebase_db.update_user(int(user_id), {'started_chat': False})
 
     await query.edit_message_text(
         f"✅ تم إرسال الإشعار بنجاح!\n\n"
-        f"📤 وصل إلى: {success_count} مستخدم\n"
-        f"❌ فشل الإرسال لـ: {failed_count} مستخدم")
+        f"📤 وصل إلى: {success} مستخدم\n"
+        f"🚫 محظور/لم يبدأ محادثة: {blocked} مستخدم\n"
+        f"❌ فشل الإرسال لـ: {failed} مستخدم")
 
 async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
-        [InlineKeyboardButton("📋 قائمة المستخدمين", callback_data="users_list_1")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+        [InlineKeyboardButton("🔍 بحث بالمعرف/اليوزرنيم", callback_data="admin_search_user")],
+        [InlineKeyboardButton("📋 قائمة المستخدمين (آخر 50)", callback_data="admin_users_list")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
     ]
 
     await query.edit_message_text(
@@ -173,80 +180,76 @@ async def manage_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['search_mode'] = True
+    context.user_data['admin_action'] = 'search_user'
     
-    keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="manage_users")]]
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="admin_manage_users")]]
     await query.edit_message_text(
         "🔍 أدخل اسم المستخدم أو الـ ID للبحث:",
         reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.username):
-        return
-        
-    if not context.user_data.get('search_mode'):
-        return
-
     search_term = update.message.text.strip()
-    context.user_data['search_mode'] = False
+    context.user_data['admin_action'] = None
 
-    user_data = firebase_db.get_user_by_username(search_term)
+    user_data = None
+    user_id = None
     
-    if not user_data and search_term.isdigit():
-        user_data = firebase_db.get_user(int(search_term))
+    # البحث بالمعرف إذا كان رقماً
+    if search_term.isdigit():
+        user_id = int(search_term)
+        user_data = firebase_db.get_user(user_id)
+    else:
+        # البحث باليوزرنيم
+        search_term = search_term.replace('@', '')
+        user_data = firebase_db.get_user_by_username(search_term)
+        if user_data:
+            user_id = next((uid for uid, data in firebase_db.get_all_users().items() 
+                          if data.get('username') == search_term), None)
 
-    if not user_data:
+    if not user_data or not user_id:
         await update.message.reply_text("❌ لم يتم العثور على المستخدم.")
         return
-
-    user_id = next((uid for uid, data in firebase_db.get_all_users().items() 
-                   if data.get('username') == search_term or uid == search_term), None)
 
     text = (
         f"👤 معلومات المستخدم:\n\n"
         f"🆔 ID: {user_id}\n"
         f"👤 اسم المستخدم: @{user_data.get('username', 'غير معروف')}\n"
+        f"📅 تاريخ التسجيل: {datetime.fromtimestamp(user_data.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M')}\n"
         f"⭐ حالة المميز: {'نعم' if user_data.get('is_premium') else 'لا'}\n"
         f"⛔ حالة الحظر: {'نعم' if user_data.get('is_banned') else 'لا'}\n"
+        f"🔄 عدد الطلبات: {user_data.get('request_count', 0)}\n"
         f"🕒 آخر نشاط: {user_data.get('last_active', 'غير معروف')}"
     )
 
     keyboard = [
         [
-            InlineKeyboardButton("🚫 حظر", callback_data=f"ban_{user_id}"),
-            InlineKeyboardButton("✅ رفع الحظر", callback_data=f"unban_{user_id}")
+            InlineKeyboardButton("🚫 حظر" if not user_data.get('is_banned') else "✅ رفع الحظر", 
+                               callback_data=f"admin_toggle_ban_{user_id}"),
+            InlineKeyboardButton("⭐ تفعيل مميز" if not user_data.get('is_premium') else "❌ إلغاء المميز", 
+                               callback_data=f"admin_toggle_premium_{user_id}")
         ],
-        [
-            InlineKeyboardButton("⭐ تفعيل مميز", callback_data=f"premium_{user_id}"),
-            InlineKeyboardButton("❌ إلغاء المميز", callback_data=f"unpremium_{user_id}")
-        ],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="manage_users")]
+        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_manage_users")]
     ]
 
-    await update.message.reply_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def manage_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
-    action, user_id = data.split('_', 1)
-
+    user_id = query.data.split('_')[-1]
+    
     try:
-        if action == "ban":
-            firebase_db.ban_user(user_id)
-            await query.edit_message_text(f"✅ تم حظر المستخدم {user_id} بنجاح.")
-        elif action == "unban":
-            firebase_db.unban_user(user_id)
-            await query.edit_message_text(f"✅ تم رفع الحظر عن المستخدم {user_id} بنجاح.")
-        elif action == "premium":
-            firebase_db.update_user(user_id, {"is_premium": True})
-            await query.edit_message_text(f"✅ تم تفعيل العضوية المميزة للمستخدم {user_id}.")
-        elif action == "unpremium":
-            firebase_db.update_user(user_id, {"is_premium": False})
-            await query.edit_message_text(f"✅ تم إلغاء العضوية المميزة للمستخدم {user_id}.")
+        if action == 'ban':
+            is_banned = not firebase_db.get_user(user_id).get('is_banned', False)
+            firebase_db.update_user(user_id, {'is_banned': is_banned})
+            action_text = "حظر" if is_banned else "رفع الحظر عن"
+        elif action == 'premium':
+            is_premium = not firebase_db.get_user(user_id).get('is_premium', False)
+            firebase_db.update_user(user_id, {'is_premium': is_premium})
+            action_text = "تفعيل العضوية المميزة ل" if is_premium else "إلغاء العضوية المميزة ل"
+        
+        await query.edit_message_text(f"✅ تم {action_text} المستخدم {user_id} بنجاح.")
     except Exception as e:
         logger.error(f"Error in manage_user_action: {str(e)}")
         await query.edit_message_text("⚠️ حدث خطأ أثناء تنفيذ العملية")
@@ -261,17 +264,17 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             f"⚙️ إعدادات البوت:\n\n"
             f"🔧 وضع الصيانة: {'✅ مفعل' if settings.get('maintenance_mode') else '❌ معطل'}\n"
-            f"📝 حد النص العادي: {settings.get('normal_text_limit', 120)} حرف\n"
-            f"📝 حد النص المميز: {settings.get('premium_text_limit', 500)} حرف\n"
-            f"🔢 عدد الطلبات اليومية: {settings.get('daily_limit', 10)}\n"
-            f"🔢 عدد طلبات المميز: {settings.get('premium_daily_limit', 50)}\n"
-            f"⏰ وقت تجديد العدادات: كل 24 ساعة"
+            f"📝 حد النص العادي: {settings.get('normal_text_limit', Config.CHAR_LIMIT)} حرف\n"
+            f"📝 حد النص المميز: {settings.get('premium_text_limit', Config.PREMIUM_CHAR_LIMIT)} حرف\n"
+            f"🔢 عدد الطلبات اليومية: {settings.get('daily_limit', Config.REQUEST_LIMIT)}\n"
+            f"🔢 عدد طلبات المميز: {settings.get('premium_daily_limit', Config.PREMIUM_REQUEST_LIMIT)}\n"
+            f"⏰ وقت تجديد العدادات: كل {Config.RESET_HOURS} ساعة"
         )
 
         keyboard = [
-            [InlineKeyboardButton("🔄 تبديل وضع الصيانة", callback_data="toggle_maintenance")],
-            [InlineKeyboardButton("✏️ تعديل الحدود", callback_data="edit_limits")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_admin")]
+            [InlineKeyboardButton("🔄 تبديل وضع الصيانة", callback_data="admin_toggle_maintenance")],
+            [InlineKeyboardButton("✏️ تعديل الحدود", callback_data="admin_edit_limits")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
         ]
 
         await query.edit_message_text(
@@ -296,6 +299,53 @@ async def toggle_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Error in toggle_maintenance: {str(e)}")
         await query.edit_message_text("⚠️ حدث خطأ أثناء تغيير وضع الصيانة")
 
+async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['admin_action'] = 'edit_limits'
+    
+    current_settings = firebase_db.get_settings()
+    
+    keyboard = [
+        [InlineKeyboardButton(f"حد النص العادي ({current_settings.get('normal_text_limit', Config.CHAR_LIMIT)})", 
+                            callback_data="admin_edit_normal_limit")],
+        [InlineKeyboardButton(f"حد النص المميز ({current_settings.get('premium_text_limit', Config.PREMIUM_CHAR_LIMIT)})", 
+                            callback_data="admin_edit_premium_limit")],
+        [InlineKeyboardButton(f"الطلبات اليومية ({current_settings.get('daily_limit', Config.REQUEST_LIMIT)})", 
+                            callback_data="admin_edit_daily_limit")],
+        [InlineKeyboardButton(f"طلبات المميزين ({current_settings.get('premium_daily_limit', Config.PREMIUM_REQUEST_LIMIT)})", 
+                            callback_data="admin_edit_premium_daily_limit")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_settings")]
+    ]
+    
+    await query.edit_message_text(
+        "⚙️ اختر الحد الذي تريد تعديله:",
+        reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def save_new_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        new_value = int(update.message.text)
+        limit_type = context.user_data.get('limit_type')
+        
+        updates = {}
+        if limit_type == 'admin_edit_normal_limit':
+            updates['normal_text_limit'] = new_value
+        elif limit_type == 'admin_edit_premium_limit':
+            updates['premium_text_limit'] = new_value
+        elif limit_type == 'admin_edit_daily_limit':
+            updates['daily_limit'] = new_value
+        elif limit_type == 'admin_edit_premium_daily_limit':
+            updates['premium_daily_limit'] = new_value
+            
+        firebase_db.update_settings(updates)
+        await update.message.reply_text("✅ تم تحديث الحد بنجاح!")
+        return await settings(update, context)
+    except ValueError:
+        await update.message.reply_text("⚠️ يجب إدخال رقم صحيح")
+    except Exception as e:
+        logger.error(f"Error saving limits: {str(e)}")
+        await update.message.reply_text("⚠️ حدث خطأ أثناء حفظ التعديلات")
+
 async def handle_normal_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة الرسائل العادية للمشرفين"""
     if is_admin(update.effective_user.username):
@@ -304,25 +354,27 @@ async def handle_normal_message(update: Update, context: ContextTypes.DEFAULT_TY
 def setup_admin_handlers(application):
     admin_filter = filters.ChatType.PRIVATE & filters.User(username=Config.ADMIN_USERNAMES)
     
+    # تسجيل المعالجات
     application.add_handler(CommandHandler("admin", admin_panel, filters=admin_filter))
-    application.add_handler(CallbackQueryHandler(show_stats, pattern="^real_stats$"))
-    application.add_handler(CallbackQueryHandler(broadcast, pattern="^broadcast$"))
+    application.add_handler(CallbackQueryHandler(show_stats, pattern="^admin_stats$"))
+    application.add_handler(CallbackQueryHandler(broadcast, pattern="^admin_broadcast$"))
+    application.add_handler(CallbackQueryHandler(confirm_broadcast, pattern="^admin_confirm_broadcast$"))
+    application.add_handler(CallbackQueryHandler(manage_users, pattern="^admin_manage_users$"))
+    application.add_handler(CallbackQueryHandler(search_user, pattern="^admin_search_user$"))
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: manage_user_action(u, c, 'ban'), 
+        pattern="^admin_toggle_ban_"))
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: manage_user_action(u, c, 'premium'), 
+        pattern="^admin_toggle_premium_"))
+    application.add_handler(CallbackQueryHandler(settings, pattern="^admin_settings$"))
+    application.add_handler(CallbackQueryHandler(toggle_maintenance, pattern="^admin_toggle_maintenance$"))
+    application.add_handler(CallbackQueryHandler(edit_limits, pattern="^admin_edit_limits$"))
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: (u, c.__setitem__('limit_type', u.callback_query.data)) or edit_limits(u, c),
+        pattern="^admin_edit_.*_limit$"))
     application.add_handler(MessageHandler(
         admin_filter & filters.TEXT & ~filters.COMMAND,
-        handle_broadcast_message
+        handle_admin_message
     ))
-    application.add_handler(CallbackQueryHandler(confirm_broadcast, pattern="^confirm_broadcast$"))
-    application.add_handler(CallbackQueryHandler(manage_users, pattern="^manage_users$"))
-    application.add_handler(CallbackQueryHandler(search_user, pattern="^search_user$"))
-    application.add_handler(MessageHandler(
-        admin_filter & filters.TEXT & ~filters.COMMAND,
-        handle_search_input
-    ))
-    application.add_handler(CallbackQueryHandler(manage_user_action, pattern="^ban_|^unban_|^premium_|^unpremium_"))
-    application.add_handler(CallbackQueryHandler(settings, pattern="^settings$"))
-    application.add_handler(CallbackQueryHandler(toggle_maintenance, pattern="^toggle_maintenance$"))
-    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^back_to_admin$"))
-    application.add_handler(MessageHandler(
-        admin_filter & filters.TEXT & ~filters.COMMAND,
-        handle_normal_message
-    ))
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_back$"))
