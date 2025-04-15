@@ -3,6 +3,7 @@ from firebase_admin import credentials, db
 from config import Config
 import logging
 import time
+from typing import Dict, List
 
 # تهيئة Firebase
 _firebase_app = None
@@ -50,7 +51,7 @@ class FirebaseDB:
     def update_user(self, user_id: int, data: dict):
         """تحديث بيانات المستخدم في Firebase"""
         try:
-            data['timestamp'] = time.time()  # تحديث الطوابع الزمنية دائماً
+            data['timestamp'] = time.time()
             self.users_ref.child(str(user_id)).update(data)
         except Exception as e:
             logging.error(f"🚨 خطأ في update_user: {str(e)}")
@@ -72,3 +73,25 @@ class FirebaseDB:
         except Exception as e:
             logging.error(f"🚨 خطأ في update_stats: {str(e)}")
             raise
+
+    def get_recent_users(self, limit: int = 10) -> Dict[str, dict]:
+        """استرجاع أحدث المستخدمين"""
+        try:
+            all_users = self.users_ref.get() or {}
+            sorted_users = sorted(
+                all_users.items(),
+                key=lambda x: x[1].get('timestamp', 0),
+                reverse=True
+            )
+            return dict(sorted_users[:limit])
+        except Exception as e:
+            logging.error(f"🚨 خطأ في get_recent_users: {str(e)}")
+            return {}
+
+    def get_all_users(self) -> Dict[str, dict]:
+        """استرجاع جميع المستخدمين"""
+        try:
+            return self.users_ref.get() or {}
+        except Exception as e:
+            logging.error(f"🚨 خطأ في get_all_users: {str(e)}")
+            return {}
