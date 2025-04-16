@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-
 class Config:
     ##############################################
     #               إعدادات البوت                #
@@ -73,16 +72,10 @@ class Config:
         raise ValueError("يجب تعيين متغير OPENROUTER_API_KEY في إعدادات Render")
 
     ##############################################
-    #              إعدادات الموقع                #
+    #              إضافة قيمة وهمية لـ SITE_URL   #
     ##############################################
-    
-    SITE_URL = os.getenv("SITE_URL")
-    if not SITE_URL:
-        raise ValueError("يجب تعيين متغير SITE_URL في إعدادات Render")
 
-    SITE_TITLE = os.getenv("SITE_TITLE")
-    if not SITE_TITLE:
-        raise ValueError("يجب تعيين متغير SITE_TITLE في إعدادات Render")
+    SITE_URL = os.getenv("SITE_URL", "http://localhost")  # قيمة وهمية هنا إذا لم يكن موجودًا في البيئة
 
     ##############################################
     #              التحقق من الإعدادات            #
@@ -98,9 +91,7 @@ class Config:
             'FIREBASE_SERVICE_ACCOUNT': 'بيانات اعتماد Firebase',
             'ADMIN_USERNAMES': 'قائمة المشرفين',
             'CHANNEL_USERNAME': 'اسم قناة العرض',
-            'OPENROUTER_API_KEY': 'مفتاح OpenRouter',
-            'SITE_URL': 'رابط الموقع',
-            'SITE_TITLE': 'عنوان الموقع'
+            'OPENROUTER_API_KEY': 'مفتاح OpenRouter'
         }
 
         missing = []
