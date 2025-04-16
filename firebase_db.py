@@ -86,28 +86,28 @@ class FirebaseDB:
 
     # ------------------- الإحصاءات -------------------
     def get_stats(self) -> dict:
-    """الحصول على الإحصاءات العامة"""
-    try:
-        stats_ref = self.root_ref.child('stats')
-        stats = stats_ref.get()
-        
-        logger.info(f"Firebase stats data: {stats}")  # تسجيل البيانات المستلمة
-        
-        if not stats:
-            initial_stats = {
-                'total_users': self.count_users(),
-                'premium_users': self.count_premium_users(),
-                'total_requests': 0,
-                'daily_requests': 0,
-                'last_reset': time.time()
-            }
-            stats_ref.set(initial_stats)
-            return initial_stats
-        
-        return stats
-    except Exception as e:
-        logger.error(f"Error getting stats: {str(e)}", exc_info=True)
-        return {}
+        """الحصول على الإحصاءات العامة"""
+        try:
+            stats_ref = self.root_ref.child('stats')
+            stats = stats_ref.get()
+            
+            logger.info(f"Firebase stats data: {stats}")  # تسجيل البيانات المستلمة
+            
+            if not stats:
+                initial_stats = {
+                    'total_users': self.count_users(),
+                    'premium_users': self.count_premium_users(),
+                    'total_requests': 0,
+                    'daily_requests': 0,
+                    'last_reset': time.time()
+                }
+                stats_ref.set(initial_stats)
+                return initial_stats
+            
+            return stats
+        except Exception as e:
+            logger.error(f"Error getting stats: {str(e)}", exc_info=True)
+            return {}
 
     def update_stats(self, data: dict):
         """تحديث الإحصاءات العامة"""
