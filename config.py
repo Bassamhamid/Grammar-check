@@ -6,6 +6,7 @@ class Config:
     ##############################################
     #               إعدادات البوت                #
     ##############################################
+
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
         raise ValueError("يجب تعيين متغير BOT_TOKEN في إعدادات Render")
@@ -74,8 +75,13 @@ class Config:
     ##############################################
     #       قيم وهمية لـ SITE_URL و SITE_TITLE     #
     ##############################################
-    SITE_URL = os.getenv("SITE_URL", "https://your-site-url.com")  # قم بتغييرها إلى رابط افتراضي أو حقيقي إذا لزم الأمر
-    SITE_TITLE = os.getenv("SITE_TITLE", "Your Site Title")  # قم بتغييرها إلى عنوان الموقع الافتراضي أو الحقيقي إذا لزم الأمر
+    SITE_URL = os.getenv("SITE_URL", "https://your-site-url.com")
+    SITE_TITLE = os.getenv("SITE_TITLE", "Your Site Title")
+    
+    ##############################################
+    #       إضافة OPENROUTER_MODEL                 #
+    ##############################################
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "gpt-3.5-turbo")
 
     ##############################################
     #              التحقق من الإعدادات            #
