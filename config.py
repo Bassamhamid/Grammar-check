@@ -9,9 +9,7 @@ class Config:
     ##############################################
     
     # Telegram Bot Token
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    if not BOT_TOKEN:
-        raise ValueError("يجب تعيين متغير BOT_TOKEN في إعدادات Render")
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "")
     
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -61,34 +59,20 @@ class Config:
     #            إعدادات Firebase               #
     ##############################################
     
-    FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL")
-    if not FIREBASE_DATABASE_URL:
-        raise ValueError("يجب تعيين متغير FIREBASE_DATABASE_URL في إعدادات Render")
-    
+    FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
     FIREBASE_SERVICE_ACCOUNT = None
     
     try:
-        # قراءة بيانات Firebase من متغيرات Render مباشرة
-        firebase_config = {
-            "type": os.getenv("FIREBASE_TYPE"),
-            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
-            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-            "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-            "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
-            "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
-            "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_CERT_URL"),
-            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL")
-        }
-        
-        FIREBASE_SERVICE_ACCOUNT = firebase_config
+        service_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+        if service_json.strip():
+            FIREBASE_SERVICE_ACCOUNT = json.loads(service_json)
+    except json.JSONDecodeError as e:
+        logging.error(f"Error parsing FIREBASE_SERVICE_ACCOUNT_JSON: {str(e)}")
     except Exception as e:
-        logging.error(f"فشل تحميل إعدادات Firebase: {str(e)}")
-        raise ValueError("إعدادات Firebase غير صالحة في متغيرات Render")
+        logging.error(f"Error loading Firebase config: {str(e)}")
 
     # إعدادات الأداء
-    REQUEST_TIMEOUT = timedelta(seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "30")))
+    REQUEST_TIMEOUT = timedelta(seconds=30)
     FIREBASE_CACHE_TTL = int(os.getenv("FIREBASE_CACHE_TTL", "300"))  # 5 دقائق
 
     ##############################################
@@ -97,18 +81,26 @@ class Config:
     
     @staticmethod
     def get_admin_usernames():
-        """استخراج أسماء المشرفين من متغيرات Render"""
+        """استخراج أسماء المشرفين من متغير البيئة"""
         admins = os.getenv("ADMIN_USERNAMES", "").strip()
         if not admins:
-            raise ValueError("يجب تعيين متغير ADMIN_USERNAMES في إعدادات Render")
+            raise ValueError("ADMIN_USERNAMES environment variable is required")
         
-        return [username.strip().lower().replace('@', '') for username in admins.split(',') if username.strip()]
+        try:
+            return [
+                username.strip().lower().replace('@', '')
+                for username in admins.split(',')
+                if username.strip()
+            ]
+        except Exception as e:
+            logging.error(f"Error processing admin usernames: {str(e)}")
+            return []
 
     ADMIN_USERNAMES = get_admin_usernames()
     MAX_BROADCAST_USERS = int(os.getenv("MAX_BROADCAST_USERS", "1000"))
-    BROADCAST_DELAY = float(os.getenv("BROADCAST_DELAY_SECONDS", "0.3"))
-    ADMIN_LOG_CHAT_ID = os.getenv("ADMIN_LOG_CHAT_ID", "")
-    ERROR_REPORTING_CHAT_ID = os.getenv("ERROR_REPORTING_CHAT_ID", "")
+    BROADCAST_DELAY = float(os.getenv("BROADCAST_DELAY", "0.3"))  # تأخير بين كل إرسال
+    BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
+    LOGS_RETENTION_DAYS = int(os.getenv("LOGS_RETENTION_DAYS", "30"))
 
     ##############################################
     #              إعدادات التصحيح               #
@@ -118,55 +110,46 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
     ##############################################
-    #            إعدادات لوحة التحكم             #
-    ##############################################
-    
-    ADMIN_PANEL_REFRESH_INTERVAL = int(os.getenv("ADMIN_PANEL_REFRESH_SECONDS", "300"))
-    STATS_AUTO_RESET_TIME = os.getenv("STATS_AUTO_RESET_TIME", "00:00")
-    MAINTENANCE_MESSAGE = os.getenv("MAINTENANCE_MESSAGE", "البوت في وضع الصيانة حالياً، الرجاء المحاولة لاحقاً")
-
-    ##############################################
     #              التحقق من الإعدادات           #
     ##############################################
     
     @classmethod
     def validate_config(cls):
-        """التحقق من صحة الإعدادات"""
-        required_vars = {
-            'BOT_TOKEN': 'توكن البوت',
+        """التحقق من وجود جميع المتغيرات المطلوبة"""
+        required_configs = {
+            'BOT_TOKEN': 'توكن بوت التليجرام',
             'FIREBASE_DATABASE_URL': 'رابط قاعدة بيانات Firebase',
-            'ADMIN_USERNAMES': 'قائمة المشرفين'
+            'ADMIN_USERNAMES': 'قائمة أسماء المشرفين',
+            'WEBHOOK_URL': 'رابط الويب هوك',
+            'FIREBASE_SERVICE_ACCOUNT': 'بيانات اعتماد Firebase'
         }
         
         missing = []
-        for var, desc in required_vars.items():
+        for var, desc in required_configs.items():
             if not getattr(cls, var):
                 missing.append(f"{var} ({desc})")
         
         if missing:
-            error_msg = "المتغيرات المطلوبة مفقودة في إعدادات Render:\n- " + "\n- ".join(missing)
+            error_msg = "المتغيرات المطلوبة مفقودة:\n- " + "\n- ".join(missing)
+            error_msg += "\n\nيرجى تعيينها في متغيرات البيئة"
             logging.critical(error_msg)
             raise ValueError(error_msg)
 
-        # تحقق من صحة توقيت إعادة التعيين
-        try:
-            if cls.STATS_AUTO_RESET_TIME:
-                hours, minutes = map(int, cls.STATS_AUTO_RESET_TIME.split(':'))
-                if not (0 <= hours < 24 and 0 <= minutes < 60):
-                    raise ValueError
-        except:
-            logging.warning("تنسيق وقت إعادة التعيين غير صالح، سيتم استخدام 00:00")
-            cls.STATS_AUTO_RESET_TIME = "00:00"
+        # تحقق إضافي لبيانات Firebase
+        if not cls.FIREBASE_SERVICE_ACCOUNT:
+            logging.critical("Firebase service account configuration is invalid")
+            raise ValueError("Invalid Firebase service account configuration")
 
 # التحقق التلقائي عند الاستيراد
 try:
+    # تكوين نظام التسجيل أولاً
     logging.basicConfig(
         level=Config.LOG_LEVEL,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
     Config.validate_config()
-    logging.info("✅ تم تحميل الإعدادات بنجاح من متغيرات Render")
+    logging.info("✅ تم تحميل الإعدادات بنجاح")
 except Exception as e:
     logging.critical(f"❌ فشل تحميل الإعدادات: {str(e)}")
     raise
