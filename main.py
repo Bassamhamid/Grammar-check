@@ -69,19 +69,29 @@ def setup_handlers(application):
         return False
 
 async def run_bot():
-    # التحقق من بيانات الاعتماد أولاً
+    """Run the bot in webhook mode"""
+    # 1. التحقق من بيانات Firebase أولاً
     if not check_firebase_credentials():
         sys.exit(1)
-    
-    # اختبار الاتصال
+
+    # 2. اختبار اتصال Firebase
     try:
         from firebase_db import db
         test_ref = db.root_ref.child('connection_test')
         test_ref.set(int(time.time()))
-        logger.info(f"✅ Firebase test write successful: {test_ref.get()}")
+        logger.info(f"✅ Firebase test write successful. Timestamp: {test_ref.get()}")
     except Exception as e:
-        logger.critical(f"❌ Firebase test failed: {str(e)}")
+        logger.critical(f"❌ Firebase connection test failed: {str(e)}", exc_info=True)
         sys.exit(1)
+
+    # 3. تهيئة البوت
+    application = None
+    try:
+        if not await initialize_system():
+            sys.exit(1)
+            
+        application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
+        # ... بقية الكود
     
     
             
