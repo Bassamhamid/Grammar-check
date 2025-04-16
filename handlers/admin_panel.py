@@ -30,6 +30,7 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     🛠 أوامر إدارة المشرفين:
     
     📊 /admin_stats - عرض إحصاءات البوت
+    🔎 /admin_check - فحص البيانات الحية
     🔍 /admin_find [user_id] - البحث عن مستخدم
     ⭐ /admin_promote [user_id] - ترقية مستخدم
     🔓 /admin_demote [user_id] - إلغاء ترقية
@@ -45,6 +46,26 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     /admin_limits 500 2000 10 50 24
     """
     await update.message.reply_text(help_text)
+ async def admin_check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر لفحص البيانات الفعلية والإحصاءات"""
+    if not await check_admin(update):
+        return
+
+    try:
+        stats = db.get_stats()
+        users_count = db.count_users()
+        premium_count = db.count_premium_users()
+
+        message = (
+            f"📊 البيانات الحية:\n"
+            f"👥 عدد المستخدمين: {users_count}\n"
+            f"⭐ عدد المميزين: {premium_count}\n\n"
+            f"📊 الإحصاءات المسجلة:\n{stats}"
+        )
+        await update.message.reply_text(message)
+    except Exception as e:
+        logger.error(f"Error in admin_check_data: {str(e)}")
+        await update.message.reply_text("⚠️ حدث خطأ أثناء فحص البيانات")   
 async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر اختباري لتحديث الإحصاءات يدويًا"""
     if not await check_admin(update):
@@ -247,7 +268,7 @@ def setup_admin_commands(application):
     application.add_handler(CommandHandler("admin", admin_help))
     application.add_handler(CommandHandler("admin_stats", admin_stats))
     application.add_handler(CommandHandler("admin_find", admin_find_user))
-    
+    application.add_handler(CommandHandler("admin_check", admin_check_data))
     # إدارة المستخدمين
     application.add_handler(CommandHandler("admin_promote", 
         lambda u, c: admin_manage_user(u, c, "promote")))
