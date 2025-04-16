@@ -13,6 +13,9 @@ class Config:
     if not BOT_TOKEN:
         raise ValueError("يجب تعيين متغير BOT_TOKEN في إعدادات Render")
 
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+if not WEBHOOK_URL:
+    raise ValueError("يجب تعيين متغير WEBHOOK_URL في إعدادات Render")
     ##############################################
     #            إعدادات Firebase (مطلوبة)       #
     ##############################################
