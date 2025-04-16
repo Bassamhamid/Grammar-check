@@ -11,24 +11,29 @@ logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        user_id = update.effective_user.id
+
+        if not limiter.db.get_user(user_id):
+            limiter.db.update_stats({
+                'total_users': limiter.db.count_users(),
+                'premium_users': limiter.db.count_premium_users()
+            })
+
         if not await check_subscription(update, context):
             await send_subscription_message(update, context)
             return
-        
-        user_id = update.effective_user.id
+
         is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
-        
-        # تعيين القيم الافتراضية بشكل آمن
+
         current_time = time.time()
         request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
         char_limit = Config.PREMIUM_CHAR_LIMIT if is_premium else Config.CHAR_LIMIT
         reset_hours = Config.PREMIUM_RESET_HOURS if is_premium else Config.RESET_HOURS
-        
+
         request_count = user_data.get('request_count', 0)
         reset_time = user_data.get('reset_time', current_time + (reset_hours * 3600))
-        
-        # حساب الوقت المتبقي مع معالجة الأخطاء
+
         try:
             time_left = max(0, float(reset_time) - current_time)
             hours_left = max(0, int(time_left // 3600))
@@ -40,7 +45,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limiter.db.update_user(user_id, {'reset_time': reset_time})
 
         remaining_uses = max(0, request_limit - request_count)
-        
+
         welcome_msg = f"""
 <b>✍️ مساعد الكتابة AI</b>
 
@@ -55,12 +60,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 📬 للاستفسارات: @info_all_tech
 """
-        
+
         keyboard = [
             [InlineKeyboardButton("📝 الطريقة العادية", callback_data="normal_usage")],
             [InlineKeyboardButton("🔑 استخدام API شخصي", callback_data="api_usage")]
         ]
-        
+
         if update.callback_query:
             await update.callback_query.edit_message_text(
                 welcome_msg,
