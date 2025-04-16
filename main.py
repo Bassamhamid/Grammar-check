@@ -1,4 +1,6 @@
 import asyncio
+import json
+import time
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -20,6 +22,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def check_firebase_credentials():
+    """تحقق من صحة متغيرات Firebase"""
+    required = ['FIREBASE_DATABASE_URL', 'FIREBASE_SERVICE_ACCOUNT']
+    missing = [var for var in required if not getattr(Config, var, None)]
+    
+    if missing:
+        logger.critical(f"❌ Missing Firebase config: {', '.join(missing)}")
+        return False
+    
+    try:
+        # تحقق من صحة JSON إذا كان نصاً
+        if isinstance(Config.FIREBASE_SERVICE_ACCOUNT, str):
+            json.loads(Config.FIREBASE_SERVICE_ACCOUNT)
+        return True
+    except Exception as e:
+        logger.critical(f"❌ Invalid Firebase credentials: {str(e)}")
+        return False
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}", exc_info=True)
     if update and update.effective_message:
@@ -33,7 +53,7 @@ async def initialize_system():
         
         logger.info("Initializing Firebase...")
         db = initialize_firebase()
-        db.initialize_stats()  # <-- هنا تهيئة الإحصائيات
+        db.initialize_stats()
         logger.info("✅ Firebase initialized successfully")
         
         logger.info(f"🔑 Admin usernames: {Config.ADMIN_USERNAMES}")
@@ -43,20 +63,16 @@ async def initialize_system():
         logger.critical(f"❌ System initialization failed: {str(e)}")
         return False
 
-# تعديل ترتيب تسجيل المعالجات
 def setup_handlers(application):
     """Register all bot handlers"""
     try:
-        # تسجيل معالجات المشرفين أولاً
         from handlers.admin_panel import setup_admin_commands
-        setup_admin_commands(application)
-        
-        # ثم باقي المعالجات
         from handlers.start import setup_start_handlers
         from handlers.text_handling import setup_text_handlers
         from handlers.subscription import setup_subscription_handlers
         from handlers.premium import setup_premium_handlers
         
+        setup_admin_commands(application)
         setup_start_handlers(application)
         setup_text_handlers(application)
         setup_subscription_handlers(application)
@@ -91,11 +107,6 @@ async def run_bot():
             sys.exit(1)
             
         application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
-        # ... بقية الكود
-    
-    
-            
-        application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
         if not setup_handlers(application):
             sys.exit(1)
@@ -120,7 +131,6 @@ async def run_bot():
         
         logger.info("🤖 Bot is now running and ready to handle updates...")
         
-        # Keep the application running
         while True:
             await asyncio.sleep(3600)
             
