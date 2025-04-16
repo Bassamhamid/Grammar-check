@@ -47,8 +47,8 @@ def setup_handlers(application):
     """Register all bot handlers"""
     try:
         # تسجيل معالجات المشرفين أولاً
-        from handlers.admin_panel import setup_admin_handlers
-        setup_admin_handlers(application)
+        from handlers.admin_panel import setup_admin_commands
+        setup_admin_commands(application)
         
         # ثم باقي المعالجات
         from handlers.start import setup_start_handlers
