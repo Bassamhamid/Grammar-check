@@ -13,18 +13,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = update.effective_user.id
 
-        if not limiter.db.get_user(user_id):
-            limiter.db.update_stats({
-                'total_users': limiter.db.count_users(),
-                'premium_users': limiter.db.count_premium_users()
-            })
-
         if not await check_subscription(update, context):
             await send_subscription_message(update, context)
             return
 
         is_premium = limiter.is_premium_user(user_id)
         user_data = limiter.db.get_user(user_id) or {}
+
+        # إذا المستخدم جديد (أي لا يوجد له بيانات)
+        if not user_data:
+            limiter.db.update_stats({
+                'total_users': limiter.db.count_users(),
+                'premium_users': limiter.db.count_premium_users()
+            })
 
         current_time = time.time()
         request_limit = Config.PREMIUM_REQUEST_LIMIT if is_premium else Config.REQUEST_LIMIT
