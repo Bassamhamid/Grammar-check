@@ -46,7 +46,8 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     /admin_limits 500 2000 10 50 24
     """
     await update.message.reply_text(help_text)
- async def admin_check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def admin_check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر لفحص البيانات الفعلية والإحصاءات"""
     if not await check_admin(update):
         return
@@ -65,8 +66,9 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(message)
     except Exception as e:
         logger.error(f"Error in admin_check_data: {str(e)}")
-        await update.message.reply_text("⚠️ حدث خطأ أثناء فحص البيانات")   
- async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("⚠️ حدث خطأ أثناء فحص البيانات")
+
+async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر اختباري لتحديث الإحصاءات يدويًا"""
     if not await check_admin(update):
         return
@@ -83,6 +85,7 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Test stats error: {str(e)}")
         await update.message.reply_text(f"❌ خطأ: {str(e)}")
+
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عرض إحصاءات البوت"""
     if not await check_admin(update):
