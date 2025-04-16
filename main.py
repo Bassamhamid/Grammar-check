@@ -32,7 +32,8 @@ async def initialize_system():
         logger.info("✅ Configuration validated successfully")
         
         logger.info("Initializing Firebase...")
-        initialize_firebase()
+        db = initialize_firebase()
+        db.initialize_stats()  # <-- هنا تهيئة الإحصائيات
         logger.info("✅ Firebase initialized successfully")
         
         logger.info(f"🔑 Admin usernames: {Config.ADMIN_USERNAMES}")
