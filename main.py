@@ -7,7 +7,7 @@ from telegram.ext import (
     ContextTypes
 )
 from config import Config
-from firebase_db import initialize_firebase
+from firebase_db import FirebaseDB
 import logging
 import sys
 
@@ -32,7 +32,6 @@ def check_firebase_credentials():
         return False
     
     try:
-        # تحقق من صحة JSON إذا كان نصاً
         if isinstance(Config.FIREBASE_SERVICE_ACCOUNT, str):
             json.loads(Config.FIREBASE_SERVICE_ACCOUNT)
         return True
@@ -52,16 +51,16 @@ async def initialize_system():
         logger.info("✅ Configuration validated successfully")
         
         logger.info("Initializing Firebase...")
-        db = initialize_firebase()
+        db = FirebaseDB()  # تغيير هنا لاستخدام الفئة مباشرة
         db.initialize_stats()
         logger.info("✅ Firebase initialized successfully")
         
         logger.info(f"🔑 Admin usernames: {Config.ADMIN_USERNAMES}")
-        return True
+        return db  # إرجاع كائن db لاستخدامه لاحقاً
         
     except Exception as e:
         logger.critical(f"❌ System initialization failed: {str(e)}")
-        return False
+        return None
 
 def setup_handlers(application):
     """Register all bot handlers"""
@@ -90,9 +89,13 @@ async def run_bot():
     if not check_firebase_credentials():
         sys.exit(1)
 
-    # 2. اختبار اتصال Firebase
+    # 2. تهيئة النظام والحصول على كائن db
+    db = await initialize_system()
+    if not db:
+        sys.exit(1)
+
+    # 3. اختبار اتصال Firebase
     try:
-        from firebase_db import db
         test_ref = db.root_ref.child('connection_test')
         test_ref.set(int(time.time()))
         logger.info(f"✅ Firebase test write successful. Timestamp: {test_ref.get()}")
@@ -100,12 +103,9 @@ async def run_bot():
         logger.critical(f"❌ Firebase connection test failed: {str(e)}", exc_info=True)
         sys.exit(1)
 
-    # 3. تهيئة البوت
+    # 4. تهيئة البوت
     application = None
     try:
-        if not await initialize_system():
-            sys.exit(1)
-            
         application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
         
         if not setup_handlers(application):
