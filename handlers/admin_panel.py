@@ -262,3 +262,4 @@ def setup_admin_commands(application):
     application.add_handler(CommandHandler("admin_broadcast", admin_broadcast))
     application.add_handler(CommandHandler("admin_maintenance", admin_maintenance))
     application.add_handler(CommandHandler("admin_limits", admin_set_limits))
+    application.add_handler(CommandHandler("admin_test", admin_test_stats))
