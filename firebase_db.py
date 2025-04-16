@@ -76,6 +76,14 @@ class FirebaseDB:
             logger.error(f"Error checking ban status for user {user_id}: {str(e)}")
             return False
 
+    def get_premium_users(self) -> dict:
+        """الحصول على المستخدمين المميزين"""
+        try:
+            return self.root_ref.child('premium_users').get() or {}
+        except Exception as e:
+            logger.error(f"Error getting premium users: {str(e)}")
+            return {}
+
     # ------------------- الإحصاءات -------------------
     def get_stats(self) -> dict:
     """الحصول على الإحصاءات العامة"""
