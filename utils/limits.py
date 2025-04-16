@@ -43,28 +43,29 @@ class UsageLimiter:
             return True, 0, Config.CHAR_LIMIT
 
     def increment_usage(self, user_id: int):
-        try:
-            is_premium = user_id in self.premium_users
-            user_data = self.db.get_user(user_id)
-            current_time = time.time()
-            
-            # تحديث الإحصائيات العامة
-            stats = self.db.get_stats()
-            self.db.update_stats({
-                'total_requests': stats.get('total_requests', 0) + 1,
-                'daily_requests': stats.get('daily_requests', 0) + 1
-            })
-            
-            # تحديث بيانات المستخدم
-            self.db.update_user(user_id, {
-                'request_count': user_data.get('request_count', 0) + 1,
-                'last_request': current_time,
-                'is_premium': is_premium
-            })
-            
-        except Exception as e:
-            logger.error(f"Error in increment_usage: {str(e)}", exc_info=True)
-            raise
+    try:
+        is_premium = user_id in self.premium_users
+        user_data = self.db.get_user(user_id)
+        current_time = time.time()
+        
+        # تحديث الإحصائيات العامة
+        stats = self.db.get_stats()
+        self.db.update_stats({
+            'total_requests': stats.get('total_requests', 0) + 1,
+            'daily_requests': stats.get('daily_requests', 0) + 1,
+            'premium_users': self.db.count_premium_users()
+        })
+        
+        # تحديث بيانات المستخدم
+        self.db.update_user(user_id, {
+            'request_count': user_data.get('request_count', 0) + 1,
+            'last_request': current_time,
+            'is_premium': is_premium
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in increment_usage: {str(e)}", exc_info=True)
+        raise
 
     def get_daily_requests_count(self) -> int:
         """الحصول على عدد الطلبات اليومية"""
