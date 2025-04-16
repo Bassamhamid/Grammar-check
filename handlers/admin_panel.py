@@ -51,16 +51,24 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_admin(update):
         return
 
-    stats = db.get_stats()
-    message = (
-        f"📊 إحصائيات البوت:\n"
-        f"👥 إجمالي المستخدمين: {stats.get('total_users', 0)}\n"
-        f"⭐ المستخدمون المميزون: {stats.get('premium_users', 0)}\n"
-        f"📨 الطلبات اليومية: {stats.get('daily_requests', 0)}\n"
-        f"📬 إجمالي الطلبات: {stats.get('total_requests', 0)}\n"
-        f"⏳ آخر تجديد: {datetime.fromtimestamp(stats.get('last_reset', 0)).strftime('%Y-%m-%d %H:%M')}"
-    )
-    await update.message.reply_text(message)
+    try:
+        stats = db.get_stats()
+        if not stats:
+            await update.message.reply_text("⚠️ لا توجد إحصاءات متاحة حالياً")
+            return
+
+        message = (
+            f"📊 إحصائيات البوت (آخر تحديث: {datetime.now().strftime('%Y-%m-%d %H:%M')})\n\n"
+            f"👥 إجمالي المستخدمين: {stats.get('total_users', 0)}\n"
+            f"⭐ المستخدمون المميزون: {stats.get('premium_users', 0)}\n"
+            f"📨 الطلبات اليومية: {stats.get('daily_requests', 0)}\n"
+            f"📬 إجمالي الطلبات: {stats.get('total_requests', 0)}\n"
+            f"⏳ آخر تجديد: {datetime.fromtimestamp(stats.get('last_reset', 0)).strftime('%Y-%m-%d %H:%M')}"
+        )
+        await update.message.reply_text(message)
+    except Exception as e:
+        logger.error(f"Error in admin_stats: {str(e)}")
+        await update.message.reply_text("⚠️ حدث خطأ أثناء جلب الإحصاءات")
 
 async def admin_find_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """البحث عن مستخدم"""
@@ -142,20 +150,36 @@ async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = db.get_all_users()
     total = len(users)
     success = 0
+    failed = 0
 
     progress_msg = await update.message.reply_text(f"⏳ جاري الإرسال... 0/{total}")
 
     for user_id in users:
         try:
-            await context.bot.send_message(chat_id=user_id, text=message)
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                disable_web_page_preview=True
+            )
             success += 1
         except Exception as e:
-            logger.error(f"فشل الإرسال لـ {user_id}: {str(e)}")
+            failed += 1
+            logger.warning(f"فشل الإرسال لـ {user_id}: {str(e)}")
         
-        if success % 10 == 0 or success == total:
-            await progress_msg.edit_text(f"⏳ جاري الإرسال... {success}/{total}")
+        # تحديث حالة التقدم كل 10 رسائل أو عند الانتهاء
+        if (success + failed) % 10 == 0 or (success + failed) == total:
+            try:
+                await progress_msg.edit_text(
+                    f"⏳ جاري الإرسال... {success + failed}/{total}\n"
+                    f"✅ نجاح: {success} | ❌ فشل: {failed}"
+                )
+            except:
+                pass  # تجاهل أخطاء تحديث الرسالة
 
-    await progress_msg.edit_text(f"✅ تم إرسال الإشعار لـ {success} من {total} مستخدم")
+    await progress_msg.edit_text(
+        f"✅ تم إرسال الإشعار لـ {success} من {total} مستخدم\n"
+        f"❌ فشل في إرسال {failed} رسالة"
+    )
 
 async def admin_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """إدارة وضع الصيانة"""
