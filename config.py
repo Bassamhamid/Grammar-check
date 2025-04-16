@@ -8,14 +8,14 @@ class Config:
     #               إعدادات البوت                #
     ##############################################
     
-    # Telegram Bot Token (مطلوب)
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
         raise ValueError("يجب تعيين متغير BOT_TOKEN في إعدادات Render")
 
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL:
-    raise ValueError("يجب تعيين متغير WEBHOOK_URL في إعدادات Render")
+    if not WEBHOOK_URL:
+        raise ValueError("يجب تعيين متغير WEBHOOK_URL في إعدادات Render")
+
     ##############################################
     #            إعدادات Firebase (مطلوبة)       #
     ##############################################
@@ -25,7 +25,6 @@ if not WEBHOOK_URL:
         raise ValueError("يجب تعيين متغير FIREBASE_DATABASE_URL في إعدادات Render")
     
     FIREBASE_SERVICE_ACCOUNT = None
-    
     try:
         service_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
         if service_json:
@@ -38,13 +37,13 @@ if not WEBHOOK_URL:
     #             حدود الاستخدام                 #
     ##############################################
     
-    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "120"))         # حد الحروف العادي
-    PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", "500"))  # حد الحروف المميز
+    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "120"))
+    PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", "500"))
     
-    REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))     # حد الطلبات العادي
-    PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))  # حد الطلبات المميز
+    REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))
+    PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))
     
-    RESET_HOURS = int(os.getenv("RESET_HOURS", "24"))        # وقت تجديد العداد
+    RESET_HOURS = int(os.getenv("RESET_HOURS", "24"))
 
     ##############################################
     #            إعدادات المشرفين                #
@@ -52,7 +51,6 @@ if not WEBHOOK_URL:
     
     @staticmethod
     def get_admin_usernames():
-        """استخراج أسماء المشرفين من متغيرات Render"""
         admins = os.getenv("ADMIN_USERNAMES", "").strip()
         if not admins:
             raise ValueError("يجب تعيين متغير ADMIN_USERNAMES في إعدادات Render")
@@ -68,36 +66,37 @@ if not WEBHOOK_URL:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
     ##############################################
-    #              التحقق من الإعدادات           #
+    #         التحقق من الإعدادات عند التشغيل     #
     ##############################################
     
     @classmethod
     def validate_config(cls):
-        """التحقق من وجود جميع المتغيرات المطلوبة"""
         required_vars = {
             'BOT_TOKEN': 'توكن البوت',
+            'WEBHOOK_URL': 'رابط الويب هوك',
             'FIREBASE_DATABASE_URL': 'رابط قاعدة بيانات Firebase',
             'FIREBASE_SERVICE_ACCOUNT': 'بيانات اعتماد Firebase',
             'ADMIN_USERNAMES': 'قائمة المشرفين'
         }
-        
+
         missing = []
         for var, desc in required_vars.items():
             if not getattr(cls, var):
                 missing.append(f"{var} ({desc})")
-        
+
         if missing:
             error_msg = "المتغيرات المطلوبة مفقودة في إعدادات Render:\n- " + "\n- ".join(missing)
             logging.critical(error_msg)
             raise ValueError(error_msg)
 
-# التحقق التلقائي عند الاستيراد
+# ضبط نظام اللوق
+logging.basicConfig(
+    level=Config.LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# التحقق التلقائي عند تشغيل الملف
 try:
-    logging.basicConfig(
-        level=Config.LOG_LEVEL,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
     Config.validate_config()
     logging.info("✅ تم تحميل الإعدادات بنجاح من متغيرات Render")
 except Exception as e:
