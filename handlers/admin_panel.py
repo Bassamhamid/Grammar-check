@@ -17,8 +17,11 @@ logger = logging.getLogger(__name__)
 db = FirebaseDB()
 
 # حالات المحادثة
-ADMIN_MAIN, ADMIN_STATS, ADMIN_USERS, ADMIN_BROADCAST, ADMIN_SETTINGS = range(5)
-AWAIT_USER_ID, AWAIT_BROADCAST, AWAIT_LIMITS = range(3)
+(
+    ADMIN_MAIN, ADMIN_STATS, ADMIN_USERS, 
+    ADMIN_BROADCAST, ADMIN_SETTINGS,
+    AWAIT_USER_ID, AWAIT_BROADCAST, AWAIT_LIMITS
+) = range(8)
 
 def is_admin(username: str) -> bool:
     """التحقق من صلاحية المشرف"""
@@ -60,21 +63,23 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     keyboard = [
-        [InlineKeyboardButton("📊 الإحصاءات", callback_data="admin_stats")],
-        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="admin_users")],
-        [InlineKeyboardButton("📢 إرسال إشعار", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="admin_settings")]
+        [InlineKeyboardButton("📊 الإحصاءات", callback_data="stats")],
+        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="users")],
+        [InlineKeyboardButton("📢 إرسال إشعار", callback_data="broadcast")],
+        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
     ]
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     if update.callback_query:
         await update.callback_query.edit_message_text(
             "🛠 لوحة تحكم المشرف - اختر القسم المطلوب:",
-            reply_markup=InlineKeyboardMarkup(keyboard))
+            reply_markup=reply_markup)
         await update.callback_query.answer()
     else:
         await update.message.reply_text(
             "🛠 لوحة تحكم المشرف - اختر القسم المطلوب:",
-            reply_markup=InlineKeyboardMarkup(keyboard))
+            reply_markup=reply_markup)
 
     return ADMIN_MAIN
 
@@ -176,44 +181,38 @@ async def handle_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ADMIN_USERS
 
-async def toggle_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تبديل حالة المستخدم المميز"""
+async def toggle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة جميع إجراءات المستخدمين (ترقية/حظر)"""
     if await check_maintenance(update, context):
         return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
-
-    user_id = int(query.data.split('_')[3])
-    user_data = db.get_user(user_id)
-    new_status = not user_data.get('is_premium', False)
-
-    db.update_user(user_id, {'is_premium': new_status})
     
-    await query.edit_message_text(
-        f"✅ تم {'ترقية' if new_status else 'إلغاء ترقية'} المستخدم {user_id}.")
-
-    return await show_users_menu(update, context)
-
-async def toggle_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تبديل حالة حظر المستخدم"""
-    if await check_maintenance(update, context):
-        return ConversationHandler.END
+    data = query.data
+    user_id = int(data.split('_')[-1]) if '_' in data else None
     
-    query = update.callback_query
-    await query.answer()
-
-    user_id = int(query.data.split('_')[3])
-    is_banned = db.is_banned(user_id)
-
-    if is_banned:
-        db.unban_user(user_id)
-        msg = f"✅ تم إلغاء حظر المستخدم {user_id}."
-    else:
-        db.ban_user(user_id, "حظر من المشرف")
-        msg = f"⛔ تم حظر المستخدم {user_id}."
-
-    await query.edit_message_text(msg)
+    if not user_id:
+        await query.edit_message_text("❌ خطأ في معرف المستخدم")
+        return await show_users_menu(update, context)
+    
+    try:
+        if 'promote' in data:
+            db.update_user(user_id, {'is_premium': True})
+            await query.edit_message_text(f"✅ تم ترقية المستخدم {user_id}")
+        elif 'demote' in data:
+            db.update_user(user_id, {'is_premium': False})
+            await query.edit_message_text(f"🔓 تم إلغاء ترقية المستخدم {user_id}")
+        elif 'ban' in data:
+            db.ban_user(user_id, "حظر من المشرف")
+            await query.edit_message_text(f"⛔ تم حظر المستخدم {user_id}")
+        elif 'unban' in data:
+            db.unban_user(user_id)
+            await query.edit_message_text(f"✅ تم إلغاء حظر المستخدم {user_id}")
+    except Exception as e:
+        logger.error(f"فشل في تنفيذ الإجراء: {str(e)}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تنفيذ الإجراء")
+    
     return await show_users_menu(update, context)
 
 async def prepare_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -360,51 +359,41 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_panel(update, context)
 
 def setup_admin_handlers(application):
-    """إعداد معالجات لوحة المشرف"""
+    """إعداد معالجات لوحة المشرف المعدلة"""
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("admin", admin_panel)],
         states={
             ADMIN_MAIN: [
-                CallbackQueryHandler(show_stats, pattern="^admin_stats$"),
-                CallbackQueryHandler(show_users_menu, pattern="^admin_users$"),
-                CallbackQueryHandler(prepare_broadcast, pattern="^admin_broadcast$"),
-                CallbackQueryHandler(show_settings, pattern="^admin_settings$"),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
+                CallbackQueryHandler(show_stats, pattern="^stats$"),
+                CallbackQueryHandler(show_users_menu, pattern="^users$"),
+                CallbackQueryHandler(prepare_broadcast, pattern="^broadcast$"),
+                CallbackQueryHandler(show_settings, pattern="^settings$"),
             ],
             ADMIN_STATS: [
-                CallbackQueryHandler(show_stats, pattern="^admin_refresh_stats$"),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
+                CallbackQueryHandler(show_stats, pattern="^refresh_stats$"),
+                CallbackQueryHandler(admin_panel, pattern="^back$")
             ],
             ADMIN_USERS: [
-                CallbackQueryHandler(search_user, pattern="^admin_search_user$"),
-                CallbackQueryHandler(toggle_premium, pattern="^admin_toggle_premium$"),
-                CallbackQueryHandler(toggle_premium, pattern="^admin_toggle_premium_\d+$"),
-                CallbackQueryHandler(toggle_ban, pattern="^admin_toggle_ban$"),
-                CallbackQueryHandler(toggle_ban, pattern="^admin_toggle_ban_\d+$"),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$"),
-                CallbackQueryHandler(show_users_menu, pattern="^admin_users$")
+                CallbackQueryHandler(search_user, pattern="^search_user$"),
+                CallbackQueryHandler(toggle_user_action, pattern=r"^(promote|demote|ban|unban)_user_\d+$"),
+                CallbackQueryHandler(admin_panel, pattern="^back$")
             ],
             ADMIN_BROADCAST: [
-                CallbackQueryHandler(prepare_broadcast, pattern="^admin_broadcast$"),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
+                MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast),
+                CallbackQueryHandler(admin_panel, pattern="^back$")
             ],
             ADMIN_SETTINGS: [
-                CallbackQueryHandler(toggle_maintenance_mode, pattern="^admin_toggle_maintenance$"),
-                CallbackQueryHandler(edit_limits, pattern="^admin_edit_limits$"),
-                CallbackQueryHandler(show_settings, pattern="^admin_refresh_settings$"),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
+                CallbackQueryHandler(toggle_maintenance_mode, pattern="^toggle_maintenance$"),
+                CallbackQueryHandler(edit_limits, pattern="^edit_limits$"),
+                CallbackQueryHandler(admin_panel, pattern="^back$")
             ],
             AWAIT_USER_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_id),
-                CallbackQueryHandler(show_users_menu, pattern="^admin_users$")
-            ],
-            AWAIT_BROADCAST: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast),
-                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
+                CallbackQueryHandler(show_users_menu, pattern="^users$")
             ],
             AWAIT_LIMITS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, save_limits),
-                CallbackQueryHandler(show_settings, pattern="^admin_settings$")
+                CallbackQueryHandler(show_settings, pattern="^settings$")
             ]
         },
         fallbacks=[CommandHandler("admin", admin_panel)],
