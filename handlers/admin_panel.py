@@ -60,10 +60,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyboard = [
-        [InlineKeyboardButton("📊 الإحصاءات", callback_data="stats")],
-        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="users")],
-        [InlineKeyboardButton("📢 إرسال إشعار", callback_data="broadcast")],
-        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
+    [InlineKeyboardButton("📊 الإحصاءات", callback_data="stats")],
+    [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="users")],
+    [InlineKeyboardButton("📢 إرسال إشعار", callback_data="broadcast")],
+    [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
     ]
 
     if update.callback_query:
@@ -87,8 +87,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_stats")],
-        [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+    [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_stats")],
+    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
     ]
 
     try:
@@ -109,12 +109,10 @@ async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
-        [InlineKeyboardButton("⭐ ترقية مستخدم", callback_data="promote_user")],
-        [InlineKeyboardButton("🔓 إلغاء ترقية", callback_data="demote_user")],
-        [InlineKeyboardButton("⛔ حظر مستخدم", callback_data="ban_user")],
-        [InlineKeyboardButton("✅ إلغاء حظر", callback_data="unban_user")],
-        [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+    [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
+    [InlineKeyboardButton("⭐ تبديل الترقية", callback_data="toggle_premium")],
+    [InlineKeyboardButton("⛔ تبديل الحظر", callback_data="toggle_ban")],
+    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
     ]
 
     await query.edit_message_text(
@@ -134,8 +132,8 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         "🔍 أرسل معرف المستخدم (رقم فقط):",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
-        ]))
+    [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
+]))
 
     return AWAIT_USER_ID
 
@@ -161,13 +159,11 @@ async def handle_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_banned = db.is_banned(user_id)
     
     keyboard = [
-        [
-            InlineKeyboardButton("⭐ ترقية" if not is_premium else "🔓 إلغاء ترقية", 
-                               callback_data=f"toggle_premium_{user_id}"),
-            InlineKeyboardButton("⛔ حظر" if not is_banned else "✅ إلغاء حظر", 
-                               callback_data=f"toggle_ban_{user_id}")
-        ],
-        [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
+    [
+        InlineKeyboardButton("⭐ تبديل الترقية", callback_data=f"toggle_premium_{user_id}"),
+        InlineKeyboardButton("⛔ تبديل الحظر", callback_data=f"toggle_ban_{user_id}")
+    ],
+    [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
     ]
 
     await update.message.reply_text(
@@ -231,8 +227,8 @@ async def prepare_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "يمكنك استخدام تنسيق Markdown مثل:\n"
         "*عريض* _مائل_ [رابط](https://example.com)",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ رجوع", callback_data="back")]
-        ]),
+    [InlineKeyboardButton("↩️ رجوع", callback_data="back")]
+]),
         parse_mode="Markdown")
 
     return AWAIT_BROADCAST
@@ -279,10 +275,10 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = db.get_settings()
     
     keyboard = [
-        [InlineKeyboardButton("🚧 تبديل وضع الصيانة", callback_data="toggle_maintenance")],
-        [InlineKeyboardButton("📝 تعديل الحدود", callback_data="edit_limits")],
-        [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_settings")],
-        [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+    [InlineKeyboardButton("🚧 تبديل وضع الصيانة", callback_data="toggle_maintenance")],
+    [InlineKeyboardButton("📝 تعديل الحدود", callback_data="edit_limits")],
+    [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_settings")],
+    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
     ]
 
     await query.edit_message_text(
@@ -326,8 +322,8 @@ async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "4. حد الطلبات المميز\n"
         "5. ساعات التجديد",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ رجوع", callback_data="settings")]
-        ]))
+    [InlineKeyboardButton("↩️ رجوع", callback_data="settings")]
+]))
 
     return AWAIT_LIMITS
 
