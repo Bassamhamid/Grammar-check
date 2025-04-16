@@ -66,7 +66,7 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in admin_check_data: {str(e)}")
         await update.message.reply_text("⚠️ حدث خطأ أثناء فحص البيانات")   
-async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+ async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر اختباري لتحديث الإحصاءات يدويًا"""
     if not await check_admin(update):
         return
