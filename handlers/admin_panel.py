@@ -53,17 +53,17 @@ def generate_stats_message():
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لوحة التحكم الرئيسية للمشرف"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     if not is_admin(update.effective_user.username):
         await update.message.reply_text("⛔ ليس لديك صلاحية الوصول إلى هذه الأداة.")
-        return
+        return ConversationHandler.END
 
     keyboard = [
-    [InlineKeyboardButton("📊 الإحصاءات", callback_data="stats")],
-    [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="users")],
-    [InlineKeyboardButton("📢 إرسال إشعار", callback_data="broadcast")],
-    [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
+        [InlineKeyboardButton("📊 الإحصاءات", callback_data="admin_stats")],
+        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="admin_users")],
+        [InlineKeyboardButton("📢 إرسال إشعار", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="admin_settings")]
     ]
 
     if update.callback_query:
@@ -81,14 +81,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عرض الإحصاءات"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
 
     keyboard = [
-    [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_stats")],
-    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+        [InlineKeyboardButton("🔄 تحديث", callback_data="admin_refresh_stats")],
+        [InlineKeyboardButton("🏠 الرئيسية", callback_data="admin_back")]
     ]
 
     try:
@@ -103,16 +103,16 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """قائمة إدارة المستخدمين"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
 
     keyboard = [
-    [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="search_user")],
-    [InlineKeyboardButton("⭐ تبديل الترقية", callback_data="toggle_premium")],
-    [InlineKeyboardButton("⛔ تبديل الحظر", callback_data="toggle_ban")],
-    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+        [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="admin_search_user")],
+        [InlineKeyboardButton("⭐ ترقية/إلغاء ترقية", callback_data="admin_toggle_premium")],
+        [InlineKeyboardButton("⛔ حظر/إلغاء حظر", callback_data="admin_toggle_ban")],
+        [InlineKeyboardButton("🏠 الرئيسية", callback_data="admin_back")]
     ]
 
     await query.edit_message_text(
@@ -124,7 +124,7 @@ async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء عملية البحث عن مستخدم"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
@@ -132,15 +132,15 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         "🔍 أرسل معرف المستخدم (رقم فقط):",
         reply_markup=InlineKeyboardMarkup([
-    [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
-]))
+            [InlineKeyboardButton("↩️ رجوع", callback_data="admin_users")]
+        ]))
 
     return AWAIT_USER_ID
 
 async def handle_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة إدخال معرف المستخدم"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     user_id = update.message.text.strip()
     
@@ -159,11 +159,13 @@ async def handle_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_banned = db.is_banned(user_id)
     
     keyboard = [
-    [
-        InlineKeyboardButton("⭐ تبديل الترقية", callback_data=f"toggle_premium_{user_id}"),
-        InlineKeyboardButton("⛔ تبديل الحظر", callback_data=f"toggle_ban_{user_id}")
-    ],
-    [InlineKeyboardButton("↩️ رجوع", callback_data="users")]
+        [
+            InlineKeyboardButton("⭐ ترقية" if not is_premium else "🔓 إلغاء ترقية", 
+                               callback_data=f"admin_toggle_premium_{user_id}"),
+            InlineKeyboardButton("⛔ حظر" if not is_banned else "✅ إلغاء حظر", 
+                               callback_data=f"admin_toggle_ban_{user_id}")
+        ],
+        [InlineKeyboardButton("↩️ رجوع", callback_data="admin_users")]
     ]
 
     await update.message.reply_text(
@@ -177,12 +179,12 @@ async def handle_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def toggle_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تبديل حالة المستخدم المميز"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
 
-    user_id = int(query.data.split('_')[2])
+    user_id = int(query.data.split('_')[3])
     user_data = db.get_user(user_id)
     new_status = not user_data.get('is_premium', False)
 
@@ -196,12 +198,12 @@ async def toggle_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def toggle_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تبديل حالة حظر المستخدم"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
 
-    user_id = int(query.data.split('_')[2])
+    user_id = int(query.data.split('_')[3])
     is_banned = db.is_banned(user_id)
 
     if is_banned:
@@ -217,7 +219,7 @@ async def toggle_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def prepare_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تحضير رسالة البث"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
@@ -227,8 +229,8 @@ async def prepare_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "يمكنك استخدام تنسيق Markdown مثل:\n"
         "*عريض* _مائل_ [رابط](https://example.com)",
         reply_markup=InlineKeyboardMarkup([
-    [InlineKeyboardButton("↩️ رجوع", callback_data="back")]
-]),
+            [InlineKeyboardButton("↩️ رجوع", callback_data="admin_back")]
+        ]),
         parse_mode="Markdown")
 
     return AWAIT_BROADCAST
@@ -236,7 +238,7 @@ async def prepare_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """إرسال رسالة بث لجميع المستخدمين"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     message = update.message.text
     users = db.get_all_users()
@@ -267,7 +269,7 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عرض إعدادات البوت"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
@@ -275,10 +277,10 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = db.get_settings()
     
     keyboard = [
-    [InlineKeyboardButton("🚧 تبديل وضع الصيانة", callback_data="toggle_maintenance")],
-    [InlineKeyboardButton("📝 تعديل الحدود", callback_data="edit_limits")],
-    [InlineKeyboardButton("🔄 تحديث", callback_data="refresh_settings")],
-    [InlineKeyboardButton("🏠 الرئيسية", callback_data="back")]
+        [InlineKeyboardButton("🚧 تبديل وضع الصيانة", callback_data="admin_toggle_maintenance")],
+        [InlineKeyboardButton("📝 تعديل الحدود", callback_data="admin_edit_limits")],
+        [InlineKeyboardButton("🔄 تحديث", callback_data="admin_refresh_settings")],
+        [InlineKeyboardButton("🏠 الرئيسية", callback_data="admin_back")]
     ]
 
     await query.edit_message_text(
@@ -309,7 +311,7 @@ async def toggle_maintenance_mode(update: Update, context: ContextTypes.DEFAULT_
 async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء تعديل الحدود"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     query = update.callback_query
     await query.answer()
@@ -322,15 +324,15 @@ async def edit_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "4. حد الطلبات المميز\n"
         "5. ساعات التجديد",
         reply_markup=InlineKeyboardMarkup([
-    [InlineKeyboardButton("↩️ رجوع", callback_data="settings")]
-]))
+            [InlineKeyboardButton("↩️ رجوع", callback_data="admin_settings")]
+        ]))
 
     return AWAIT_LIMITS
 
 async def save_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ الحدود الجديدة"""
     if await check_maintenance(update, context):
-        return
+        return ConversationHandler.END
     
     try:
         limits = update.message.text.split('\n')
@@ -363,44 +365,46 @@ def setup_admin_handlers(application):
         entry_points=[CommandHandler("admin", admin_panel)],
         states={
             ADMIN_MAIN: [
-                CallbackQueryHandler(show_stats, pattern="^stats$"),
-                CallbackQueryHandler(show_users_menu, pattern="^users$"),
-                CallbackQueryHandler(prepare_broadcast, pattern="^broadcast$"),
-                CallbackQueryHandler(show_settings, pattern="^settings$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$")
+                CallbackQueryHandler(show_stats, pattern="^admin_stats$"),
+                CallbackQueryHandler(show_users_menu, pattern="^admin_users$"),
+                CallbackQueryHandler(prepare_broadcast, pattern="^admin_broadcast$"),
+                CallbackQueryHandler(show_settings, pattern="^admin_settings$"),
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
             ],
             ADMIN_STATS: [
-                CallbackQueryHandler(show_stats, pattern="^refresh_stats$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$")
+                CallbackQueryHandler(show_stats, pattern="^admin_refresh_stats$"),
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
             ],
             ADMIN_USERS: [
-                CallbackQueryHandler(search_user, pattern="^search_user$"),
-                CallbackQueryHandler(toggle_premium, pattern="^toggle_premium_"),
-                CallbackQueryHandler(toggle_ban, pattern="^toggle_ban_"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(show_users_menu, pattern="^users$")
+                CallbackQueryHandler(search_user, pattern="^admin_search_user$"),
+                CallbackQueryHandler(toggle_premium, pattern="^admin_toggle_premium$"),
+                CallbackQueryHandler(toggle_premium, pattern="^admin_toggle_premium_\d+$"),
+                CallbackQueryHandler(toggle_ban, pattern="^admin_toggle_ban$"),
+                CallbackQueryHandler(toggle_ban, pattern="^admin_toggle_ban_\d+$"),
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$"),
+                CallbackQueryHandler(show_users_menu, pattern="^admin_users$")
             ],
             ADMIN_BROADCAST: [
-                CallbackQueryHandler(prepare_broadcast, pattern="^broadcast$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$")
+                CallbackQueryHandler(prepare_broadcast, pattern="^admin_broadcast$"),
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
             ],
             ADMIN_SETTINGS: [
-                CallbackQueryHandler(toggle_maintenance_mode, pattern="^toggle_maintenance$"),
-                CallbackQueryHandler(edit_limits, pattern="^edit_limits$"),
-                CallbackQueryHandler(show_settings, pattern="^refresh_settings$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$")
+                CallbackQueryHandler(toggle_maintenance_mode, pattern="^admin_toggle_maintenance$"),
+                CallbackQueryHandler(edit_limits, pattern="^admin_edit_limits$"),
+                CallbackQueryHandler(show_settings, pattern="^admin_refresh_settings$"),
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
             ],
             AWAIT_USER_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_id),
-                CallbackQueryHandler(show_users_menu, pattern="^users$")
+                CallbackQueryHandler(show_users_menu, pattern="^admin_users$")
             ],
             AWAIT_BROADCAST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, send_broadcast),
-                CallbackQueryHandler(back_to_menu, pattern="^back$")
+                CallbackQueryHandler(back_to_menu, pattern="^admin_back$")
             ],
             AWAIT_LIMITS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, save_limits),
-                CallbackQueryHandler(show_settings, pattern="^settings$")
+                CallbackQueryHandler(show_settings, pattern="^admin_settings$")
             ]
         },
         fallbacks=[CommandHandler("admin", admin_panel)],
