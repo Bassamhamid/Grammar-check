@@ -69,7 +69,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.edit_message_text(
             "🛠 لوحة تحكم المشرف - اختر القسم المطلوب:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
         await update.callback_query.answer()
     else:
         await update.message.reply_text(
