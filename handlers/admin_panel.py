@@ -45,7 +45,23 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     /admin_limits 500 2000 10 50 24
     """
     await update.message.reply_text(help_text)
+async def admin_test_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر اختباري لتحديث الإحصاءات يدويًا"""
+    if not await check_admin(update):
+        return
 
+    try:
+        # تحديث الإحصاءات يدوياً
+        db.update_stats({
+            'total_users': db.count_users(),
+            'premium_users': db.count_premium_users()
+        })
+        
+        stats = db.get_stats()
+        await update.message.reply_text(f"✅ تم تحديث الإحصاءات يدويًا\n{stats}")
+    except Exception as e:
+        logger.error(f"Test stats error: {str(e)}")
+        await update.message.reply_text(f"❌ خطأ: {str(e)}")
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """عرض إحصاءات البوت"""
     if not await check_admin(update):
