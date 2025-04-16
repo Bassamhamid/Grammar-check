@@ -141,6 +141,21 @@ class FirebaseDB:
             logger.error(f"Error counting premium users: {str(e)}")
             return 0
 
+    def initialize_stats(self):
+        """تهيئة الإحصاءات إذا لم تكن موجودة"""
+        try:
+            if not self.root_ref.child('stats').get():
+                self.root_ref.child('stats').set({
+                    'total_users': self.count_users(),
+                    'premium_users': self.count_premium_users(),
+                    'total_requests': 0,
+                    'daily_requests': 0,
+                    'last_reset': time.time()
+                })
+        except Exception as e:
+            logger.error(f"Error initializing stats: {str(e)}")
+            raise
+
     # ------------------- الإعدادات -------------------
     def get_settings(self) -> dict:
         """الحصول على إعدادات البوت"""
