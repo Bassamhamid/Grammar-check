@@ -65,3 +65,17 @@ class Config:
     ##############################################
 
     PORT = int(os.getenv("PORT", "10000"))  # Render سيرفر يحدد البورت وقت التشغيل
+
+    @staticmethod
+    def validate_config():
+        """دالة للتحقق من صحة الإعدادات"""
+        if not Config.BOT_TOKEN:
+            raise ValueError("يجب تعيين متغير BOT_TOKEN")
+        if not Config.WEBHOOK_URL:
+            raise ValueError("يجب تعيين متغير WEBHOOK_URL")
+        if not Config.FIREBASE_DATABASE_URL:
+            raise ValueError("يجب تعيين متغير FIREBASE_DATABASE_URL")
+        if not Config.ADMIN_USERNAMES:
+            raise ValueError("يجب تعيين متغير ADMIN_USERNAMES")
+
+        logging.info("✅ جميع الإعدادات تم التحقق منها بنجاح")
