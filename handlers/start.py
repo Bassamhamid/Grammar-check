@@ -125,7 +125,10 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user_data = limiter.db.get_user(user_id) or {}
         if user_data.get('request_count', 0) >= request_limit:
-            await update.message.reply_text("⚠️ لقد استنفذت عدد الطلبات اليومية. يرجى المحاولة لاحقاً.")
+            await update.message.reply_text(
+    f"⚠️ عذراً، الحد الأقصى المسموح به هو {char_limit} حرفاً.\n"
+    f"عدد أحرف نصك: {len(user_text)}"
+            )
             return
         
         keyboard = [
