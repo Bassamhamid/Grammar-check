@@ -120,7 +120,10 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         if len(user_text) > char_limit:
-            await update.message.reply_text(f"⚠️ النص يتجاوز الحد المسموح ({char_limit} حرفاً)")
+            await update.message.reply_text(
+    f"⚠️ عذراً، الحد الأقصى المسموح به هو {char_limit} حرفاً.\n"
+    f"عدد أحرف نصك: {len(user_text)}"
+            )
             return
         
         user_data = limiter.db.get_user(user_id) or {}
