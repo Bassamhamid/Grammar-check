@@ -47,7 +47,7 @@ class Config:
     REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))
     PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))
     RESET_HOURS = int(os.getenv("RESET_HOURS", "24"))
-
+    PREMIUM_RESET_HOURS = int(os.getenv("PREMIUM_RESET_HOURS", "24"))
     ##############################################
     #            إعدادات المشرفين                #
     ##############################################
