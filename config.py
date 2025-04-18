@@ -42,7 +42,7 @@ class Config:
     #             حدود الاستخدام                 #
     ##############################################
 
-    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "150"))
+    CHAR_LIMIT = int(os.getenv("CHAR_LIMIT", "200"))
     PREMIUM_CHAR_LIMIT = int(os.getenv("PREMIUM_CHAR_LIMIT", "500"))
     REQUEST_LIMIT = int(os.getenv("REQUEST_LIMIT", "10"))
     PREMIUM_REQUEST_LIMIT = int(os.getenv("PREMIUM_REQUEST_LIMIT", "50"))
